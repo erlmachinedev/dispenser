@@ -1,0 +1,9 @@
+.DS_Store
+.erlang.mk/
+*.beam
+dispenser.d
+deps/
+ebin/
+log/
+logs/
+
