@@ -1,8 +1,9 @@
 -module(dispenser_app).
--behaviour(application).
 
 -export([start/2]).
 -export([stop/1]).
+
+-behaviour(application).
 
 start(_Type, _Args) ->
 	dispenser_sup:start_link().
