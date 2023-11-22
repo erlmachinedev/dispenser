@@ -1,6 +1,6 @@
 -module(dispenser_sup).
 
--export([start_link/0, start_child/1, start_child/2]).
+-export([start_link/0, start_child/3]).
 
 -export([init/1]).
 
@@ -9,14 +9,11 @@
 start_link() ->
 	supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
-start_child(Mod) ->
-	start_child(Mod, _Fun = fun io:write/1).
-
-start_child(Mod, Fun) ->
+start_child(Mod, Shutdown, Depth) ->
 	M = dispenser,
 	F = start_link,
 	
-	A = [Mod, Fun],
+	A = [Mod, Shutdown, Depth],
 
 	Spec = #{ id => M, start => {M, F, A}, shutdown => 2000 },
 
@@ -24,8 +21,5 @@ start_child(Mod, Fun) ->
 
 init([]) ->
 	Flags = #{ strategy => one_for_one, intensity => 1, period => 5 },
-	
-	%% TODO 2000 ms timeout to complete the termination
-	%% TODO Timeout is infinity by default
 	
 	erlbox:success({Flags, _Procs = []}).

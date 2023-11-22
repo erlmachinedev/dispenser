@@ -69,7 +69,7 @@ test(Config) ->
     
     %ct:print("Res: ~p", [Res]),
     
-    %% TODO Lambda will not start a client until task is ready (404 code)
+    %% TODO Lambda will not start a client until the task is ready (404 code)
     
     T = "~p",
     
@@ -104,8 +104,6 @@ test(Config) ->
 %%--------------------------------------------------------------------
 
 bootstrap(_Mode) ->
-    %% TODO Start Cowboy server to model Lambda (delayed task processing)
-
     Res = application:ensure_all_started(dispenser),
     Res.
 
