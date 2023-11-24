@@ -24,6 +24,7 @@
 
 -behaviour(gen_statem).
 
+
 %% TODO Add the ENV list check during the start
 
 %% TODO The usage of _HANDLER, LAMBDA_TASK_ROOT and other ENVs
@@ -105,10 +106,32 @@ callback_mode() -> [state_functions, state_enter].
 
 %%  State machine
 
+process(enter, _State, Data) ->
+    Pid = connection(Data),
+    
+    Ref = gun:get(Pid, "/2018-06-01/runtime/invocation/next"),
+    
+    {keep_state, NewData};
+
 process(_Type, _Msg, Data) ->
     %% TODO "If" condition to decide termination
 
+    %% NOTE The Runtime state machine should not terminate itself
+
+    try exec(Event, _Context = context(Headers))
+    
+    %% Respond to the Lambda
+    
+    catch E:R:S ->
+    
+    %% Report invocation report
+    
+    end,
+
     {repeat_state, NewData, Actions}.
+
+process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
+    {stop, Reason, Data};
 
 %%% Data
 
