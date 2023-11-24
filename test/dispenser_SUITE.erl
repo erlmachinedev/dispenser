@@ -69,6 +69,10 @@ test(Config) ->
     
     %ct:print("Res: ~p", [Res]),
     
+    %% TODO Implement gun mock as a Fun
+    
+    %% TODO Consider to implement Gun emulator (recorded scenario inside process)
+    
     %% TODO Lambda will not start a client until the task is ready (404 code)
     
     T = "~p",
