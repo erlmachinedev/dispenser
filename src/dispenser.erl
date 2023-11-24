@@ -9,7 +9,6 @@
 
 -export([boot/1, boot/2, boot/3]).
 
--export([name/0]).
 -export([start_link/0]).
 
 -export([encode/1, encode/2, decode/1, decode/2]).
@@ -23,7 +22,6 @@
 -export([file/1, method/0]).
 
 -behaviour(gen_statem).
-
 
 %% TODO Add the ENV list check during the start
 
@@ -88,6 +86,14 @@ init(Data) ->
     %% TODO Perform a connection here
 
     ct:print(T, [URI]),
+
+    Host = maps:get(host, URI),
+    Port = maps:get(port, URI),
+    
+    {ok, Pid} = gun:open(Host, Port, _Opts = #{ transport => tcp }),
+    {ok, _} = gun:await_up(Pid),
+
+    monitor(process, Pid),
 
     try setup(Data)
     
