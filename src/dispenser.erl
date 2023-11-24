@@ -7,15 +7,18 @@
 
 -import(erlbox, [success/2, failure/2]).
 
+-export([boot/1, boot/2, boot/3]).
+
 -export([name/0]).
 -export([start_link/0]).
 
-%-export([init/1]).
-%-export([terminate/3]).
-%-export([callback_mode/0]).
+-export([encode/1, encode/2, decode/1, decode/2]).
 
-%-export([initiate/3]).
-%-export([transmit/3]).
+-export([init/1]).
+-export([terminate/3]).
+-export([callback_mode/0]).
+
+-export([process/3]).
 
 -export([file/1, method/0]).
 
@@ -31,14 +34,40 @@
 
 %%% API
 
+boot(Mod) ->
+    boot(Mod, _Shutdown = fun init:stop/0).
+
+boot(Mod, Shutdown) ->
+    boot(Mod, Shutdown, _Depth = -1).
+
+boot(Mod, Shutdown, Depth) when is_function(Shutdown),
+                                is_integer(Depth),
+                                
+                                is_atom(Mod) ->
+                                
+    Res = dispenser_sup:start_child(Mod, Shutdown, Depth),
+    Res.
+
+encode(Term) ->
+    encode(Term, []).
+
+encode(Term, Opts) ->
+    jsx:encode(Term, Opts).
+    
+decode(Json) ->
+    decode(Json, []).
+
+decode(Json, Opts) ->
+    jsx:decode(Json, Opts).
+
 name() ->
     ?MODULE.
 
--spec start_link(module(), function()) -> success(pid()).
-start_link(Mod, Shutdown) ->
+-spec start_link(module(), function(), -1 | integer >0) -> success(pid()).
+start_link(Mod, Shutdown, Depth) ->
     Name = name(),
     
-    Data = data(Mod, Shutdown),
+    Data = data(Mod, Shutdown, fun (X) -> io_lib:write(X, Depth) end),
     
     Time = 10000,
     
@@ -46,9 +75,7 @@ start_link(Mod, Shutdown) ->
 
 %% gen_statem
 
-%% gen_statem
-
--record(data, { switch::function(), socket::function() }).
+-record(data, { module::module(), shutdown::function(), format::function() }).
 
 -type data() :: #data{}.
 
@@ -67,6 +94,12 @@ init([]) ->
     
     catch E:R:S ->
 
+
+%%% Data
+
+-spec data(module(), function(), function()) -> data().
+data(Mod, Shutdown, Format) ->
+    #data{ module = Mod, shutdown = Shutdown, format = Format }.
 
 %% ENV
 
