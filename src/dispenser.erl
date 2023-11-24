@@ -5,7 +5,7 @@
 -define(LAMBDA_TASK_ROOT, "LAMBDA_TASK_ROOT").
 -define(_HANDLER, "_HANDLER").
 
--import(erlbox, [success/2, failure/2]).
+-import(erlbox, [success/3, failure/2]).
 
 -export([boot/1, boot/2, boot/3]).
 
@@ -25,10 +25,8 @@
 -behaviour(gen_statem).
 
 %% TODO Add the ENV list check during the start
-%% TODO Compile option (layer support)
-%% TODO The usage of _HANDLER, LAMBDA_TASK_ROOT and other ENVs
 
-%% TODO Configuration encode/decode (via callback)
+%% TODO The usage of _HANDLER, LAMBDA_TASK_ROOT and other ENVs
 
 %% TODO setup(path), Fun = shutdown(), is_restored(), exec
 
@@ -79,21 +77,38 @@ start_link(Mod, Shutdown, Depth) ->
 
 -type data() :: #data{}.
 
-init([]) ->
+init(Data) ->
     process_flag(sensitive, true),
     
     T = "~p",
     
     URI = uri(),
 
+    %% TODO Perform a connection here
+
     ct:print(T, [URI]),
 
     try setup(Data)
-
-    success(initiate, websocket(_Data = data(F0))).
     
-    catch E:R:S ->
+        success(process, Data, []).
+    
+    catch E:R:S -> ok 
+    %% TODO Runtime report (the same way as exec report)
 
+        failure(R)
+    end;
+
+terminate(_Reason, _State, _Data) ->
+    ok.
+
+callback_mode() -> [state_functions, state_enter].
+
+%%  State machine
+
+process(_Type, _Msg, Data) ->
+    %% TODO "If" condition to decide termination
+
+    {repeat_state, NewData, Actions}.
 
 %%% Data
 
