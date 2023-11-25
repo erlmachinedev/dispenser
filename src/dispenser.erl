@@ -29,6 +29,8 @@
 
 %% TODO setup(path), Fun = shutdown(), is_restored(), exec
 
+%% NOTE Client can generate more readable exceptions via erlang:error/3 
+
 %%% API
 
 boot(Mod) ->
@@ -37,13 +39,12 @@ boot(Mod) ->
 boot(Mod, Shutdown) ->
     boot(Mod, Shutdown, _Depth = -1).
 
-boot(Mod, Shutdown, Depth) when is_function(Shutdown),
-                                is_integer(Depth),
+boot(Mod, Shutdown, Opts) when is_function(Shutdown),
+                               is_integer(Depth),
                                 
-                                is_atom(Mod) ->
+                               is_map(Opts) ->
                                 
-    Res = dispenser_sup:start_child(Mod, Shutdown, Depth),
-    Res.
+    dispenser_sup:start_child(Mod, Shutdown, Opts).
 
 encode(Term) ->
     encode(Term, []).
@@ -60,11 +61,13 @@ decode(Json, Opts) ->
 name() ->
     ?MODULE.
 
--spec start_link(module(), function(), -1 | integer >0) -> success(pid()).
-start_link(Mod, Shutdown, Depth) ->
+-spec start_link(module(), function(), map()) -> success(pid()).
+start_link(Mod, Shutdown, Opts) ->
     Name = name(),
     
-    Data = data(Mod, Shutdown, fun (X) -> io_lib:write(X, Depth) end),
+    Format = fun (E, R, S) -> erl_error:format_exception(E, R, S, Opts) end,
+    
+    Data = data(Mod, Shutdown, Format),
     
     Time = 10000,
     
@@ -83,8 +86,6 @@ init(Data) ->
     
     URI = uri(),
 
-    %% TODO Perform a connection here
-
     ct:print(T, [URI]),
 
     Host = maps:get(host, URI),
@@ -97,10 +98,18 @@ init(Data) ->
 
     try setup(Data)
     
-        success(process, Data, []).
+        success(process, Data, [])
     
-    catch E:R:S -> ok 
-    %% TODO Runtime report (the same way as exec report)
+    catch E:R:S -> 
+        Body = #{ stackTrace => stacktrace(S), 
+                  
+                  errorType => E, 
+                  errorMessage => R
+                },
+        
+        Json = jsx:encode(Body),
+        
+        gun:post(Pid, "/runtime/init/error", _Headers = [], Json)
 
         failure(R)
     end;
@@ -144,6 +153,35 @@ process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
 -spec data(module(), function(), function()) -> data().
 data(Mod, Shutdown, Format) ->
     #data{ module = Mod, shutdown = Shutdown, format = Format }.
+
+-spec module(data()) -> module().
+module(Data) ->
+    Res = Data#data.module,
+    Res.
+
+-spec format(data()) -> function().
+format(Data) ->
+    Res = Data#data.format,
+    Res.
+
+-spec setup(data()) -> success().
+setup(Data) ->
+    Mod = module(Data),
+    
+    Mod:setup().
+
+-spec exec(data(), event(), context()) -> binary().
+exec(Data, Event, Context) ->
+    Mod = module(Data),
+    
+    Mod:exec(Event, Context).
+    
+-spec stacktrace(data(), [term()]) -> [string()].
+stacktrace(Data, Term) ->
+    Fun = format(Data), true = is_function(Fun),
+    
+    Res = Fun(Term),
+    Res.
 
 %% ENV
 
