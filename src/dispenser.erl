@@ -23,12 +23,6 @@
 
 -behaviour(gen_statem).
 
-%% TODO Add the ENV list check during the start
-
-%% TODO The usage of _HANDLER, LAMBDA_TASK_ROOT and other ENVs
-
-%% TODO setup(path), Fun = shutdown(), is_restored(), exec
-
 %% NOTE Client can generate more readable exceptions via erlang:error/3 
 
 %%% API
@@ -66,7 +60,7 @@ start_link(Mod, Shutdown, Opts) ->
     Name = name(),
     
     Format = fun (E, R, S) -> erl_error:format_exception(E, R, S, Opts) end,
-    
+
     Data = data(Mod, Shutdown, Format),
     
     Time = 10000,
@@ -75,30 +69,30 @@ start_link(Mod, Shutdown, Opts) ->
 
 %% gen_statem
 
--record(data, { module::module(), shutdown::function(), format::function() }).
+-record(data, { module::module(), 
+                format::function(), shutdown::function(), 
+
+                connection::pid() 
+              }).
 
 -type data() :: #data{}.
 
 init(Data) ->
     process_flag(sensitive, true),
     
-    T = "~p",
-    
     URI = uri(),
-
-    ct:print(T, [URI]),
 
     Host = maps:get(host, URI),
     Port = maps:get(port, URI),
     
     {ok, Pid} = gun:open(Host, Port, _Opts = #{ transport => tcp }),
     {ok, _} = gun:await_up(Pid),
-
+    
     monitor(process, Pid),
 
     try setup(Data)
     
-        success(process, Data, [])
+        success(process, connection(Data, Pid), [])
     
     catch E:R:S -> 
         Body = #{ stackTrace => stacktrace(S), 
@@ -109,7 +103,11 @@ init(Data) ->
         
         Json = jsx:encode(Body),
         
-        gun:post(Pid, "/runtime/init/error", _Headers = [], Json)
+        Ref = gun:get(Pid, "/runtime/init/error", _Headers = [], Json),
+        
+        {response, nofin, 200, _Headers} = gun:await(Pid, Ref1),
+
+        ct:print(Res),
 
         failure(R)
     end;
@@ -131,8 +129,6 @@ process(enter, _State, Data) ->
 process(_Type, _Msg, Data) ->
     %% TODO "If" condition to decide termination
 
-    %% NOTE The Runtime state machine should not terminate itself
-
     try exec(Event, _Context = context(Headers))
     
     %% Respond to the Lambda
@@ -146,13 +142,24 @@ process(_Type, _Msg, Data) ->
     {repeat_state, NewData, Actions}.
 
 process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
-    {stop, Reason, Data};
+    %% TODO Switch to the cancellation state 
+
+    {next_state, state, Reason, Data};
 
 %%% Data
 
 -spec data(module(), function(), function()) -> data().
 data(Mod, Shutdown, Format) ->
     #data{ module = Mod, shutdown = Shutdown, format = Format }.
+
+-spec connection(data(), pid()) -> data().
+connection(Data, Pid) ->
+    Data#data{ connection = Pid }.
+
+-spec connection(data()) -> pid().
+connection(Data) ->
+    Res = Data#data.connection,
+    Res.
 
 -spec module(data()) -> module().
 module(Data) ->
