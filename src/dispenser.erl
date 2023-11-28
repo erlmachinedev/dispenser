@@ -96,8 +96,8 @@ init(Data) ->
         failure(R)
     end.
 
-terminate(_Reason, _State, Data) ->
-    Fun = shutdown(Data),
+terminate(Reason, _State, Data) ->
+    Fun = shutdown(Data, Reason),
 
     Fun().
 
@@ -113,11 +113,10 @@ process(enter, _State, Data) ->
     {keep_state, NewData};
 
 process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
-    %% TODO "If" condition to decide termination
-
     try exec(Event, _Context = context(Headers))
     
-    %% Respond to the Lambda in a sync mode (report if status 413)
+    %% TODO Respond to the Lambda in a sync mode (report if status 413)
+    %% TODO Consider a dedicated state for SnapStart mode
     
     catch E:R:S -> 
         report(E, R, S)
@@ -126,12 +125,12 @@ process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
     {repeat_state, Data, []};
     
 process(info, {gun_response, _Pid, _Ref, _, _Status, _Headers}, Data) ->
-    %% TODO Switch to the cancellation state 
+   %% TODO Terminate the runtime
 
     stop;
 
 process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
-    %% TODO Switch to the cancellation state 
+    %% TODO Terminate the runtime
 
     {stop, Reason, Data};
 
