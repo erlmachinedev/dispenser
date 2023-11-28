@@ -5,11 +5,11 @@
 -define(LAMBDA_TASK_ROOT, "LAMBDA_TASK_ROOT").
 -define(_HANDLER, "_HANDLER").
 
--import(erlbox, [success/3, failure/2]).
+-import(erlbox, [success/3, failure/1]).
 
 -export([boot/1, boot/2, boot/3]).
 
--export([start_link/0]).
+-export([start_link/3]).
 
 -export([encode/1, encode/2, decode/1, decode/2]).
 
@@ -23,6 +23,8 @@
 
 -behaviour(gen_statem).
 
+-include_lib("erlbox/include/erlbox.hrl").
+
 %% NOTE Client can generate more readable runtime exceptions via erlang:error/3 
 
 %%% API
@@ -33,8 +35,8 @@ boot(Mod) ->
 boot(Mod, Shutdown) ->
     boot(Mod, Shutdown, _Depth = -1).
 
-boot(Mod, Shutdown, Opts) when is_function(Shutdown),
-                               is_integer(Depth),
+boot(Mod, Shutdown, Opts) when is_atom(Mod),
+                               is_function(Shutdown),
                                 
                                is_map(Opts) ->
                                 
@@ -80,28 +82,24 @@ start_link(Mod, Shutdown, Opts) ->
 init(Data) ->
     process_flag(sensitive, true),
     
-    URI = uri(),
-
-    Host = maps:get(host, URI),
-    Port = maps:get(port, URI),
-    
-    {ok, Pid} = gun:open(Host, Port, _Opts = #{ transport => tcp }),
-    {ok, _} = gun:await_up(Pid),
+    Pid = connect(_URI = uri()),
     
     monitor(process, Pid),
 
-    try setup(Data)
+    try setup(Data),
     
         success(process, connection(Data, Pid), [])
     
     catch E:R:S -> 
-        report(Pid, E, R, S),
+        report(Pid, _Path = "/runtime/init/error", E, R, S),
         
         failure(R)
-    end;
+    end.
 
-terminate(_Reason, _State, _Data) ->
-    ok.
+terminate(_Reason, _State, Data) ->
+    Fun = shutdown(Data),
+
+    Fun().
 
 callback_mode() -> [state_functions, state_enter].
 
@@ -114,23 +112,33 @@ process(enter, _State, Data) ->
     
     {keep_state, NewData};
 
-process(_Type, _Msg, Data) ->
+process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
     %% TODO "If" condition to decide termination
 
     try exec(Event, _Context = context(Headers))
     
-    %% Respond to the Lambda
+    %% Respond to the Lambda in a sync mode (report if status 413)
     
     catch E:R:S -> 
         report(E, R, S)
     end,
 
-    {repeat_state, NewData, Actions}.
+    {repeat_state, Data, []};
+    
+process(info, {gun_response, _Pid, _Ref, _, _Status, _Headers}, Data) ->
+    %% TODO Switch to the cancellation state 
+
+    stop;
 
 process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
     %% TODO Switch to the cancellation state 
 
-    {next_state, state, Reason, Data};
+    {stop, Reason, Data};
+
+process(_Type, Msg, Data) ->
+    ct:print("~p", Msg),
+    
+    {keep_state, Data, []}.
 
 %%% Data
 
@@ -178,7 +186,7 @@ stacktrace(Data, Term) ->
 
 %% HTTP
 
-connect() ->
+connect(URI) ->
     Host = maps:get(host, URI),
     Port = maps:get(port, URI),
     
@@ -190,7 +198,7 @@ connect() ->
     Res = Pid,
     Res.
 
-report(Pid, E, R, S) ->
+report(Pid, Path, E, R, S) ->
     Headers = [{<<"content-type">>, <<"application/json">>}],
     
     Body = #{ stackTrace => stacktrace(S), 
@@ -201,9 +209,16 @@ report(Pid, E, R, S) ->
         
     Json = jsx:encode(Body),
         
-    Ref = gun:post(Pid, "/runtime/init/error", Headers, Json),
+    Ref = gun:post(Pid, Path, Headers, Json),
         
-    {response, nofin, 200, _Headers} = gun:await(Pid, Ref1),
+    {response, nofin, Code, _Headers} = gun:await(Pid, Ref1),
+    
+    %% TODO Consider HTTP status as a return parameter
+    %% TODO Print response body to console
+    
+    Res = Code,
+    Res.
+    
 
 %% ENV
 
