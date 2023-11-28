@@ -23,7 +23,7 @@
 
 -behaviour(gen_statem).
 
-%% NOTE Client can generate more readable exceptions via erlang:error/3 
+%% NOTE Client can generate more readable runtime exceptions via erlang:error/3 
 
 %%% API
 
@@ -95,20 +95,8 @@ init(Data) ->
         success(process, connection(Data, Pid), [])
     
     catch E:R:S -> 
-        Body = #{ stackTrace => stacktrace(S), 
-                  
-                  errorType => E, 
-                  errorMessage => R
-                },
+        report(Pid, E, R, S),
         
-        Json = jsx:encode(Body),
-        
-        Ref = gun:get(Pid, "/runtime/init/error", _Headers = [], Json),
-        
-        {response, nofin, 200, _Headers} = gun:await(Pid, Ref1),
-
-        ct:print(Res),
-
         failure(R)
     end;
 
@@ -133,10 +121,8 @@ process(_Type, _Msg, Data) ->
     
     %% Respond to the Lambda
     
-    catch E:R:S ->
-    
-    %% Report invocation report
-    
+    catch E:R:S -> 
+        report(E, R, S)
     end,
 
     {repeat_state, NewData, Actions}.
@@ -189,6 +175,35 @@ stacktrace(Data, Term) ->
     
     Res = Fun(Term),
     Res.
+
+%% HTTP
+
+connect() ->
+    Host = maps:get(host, URI),
+    Port = maps:get(port, URI),
+    
+    {ok, Pid} = gun:open(Host, Port, _Opts = #{ transport => tcp }),
+    {ok, Ret} = gun:await_up(Pid),
+
+    Ret = http,
+
+    Res = Pid,
+    Res.
+
+report(Pid, E, R, S) ->
+    Headers = [{<<"content-type">>, <<"application/json">>}],
+    
+    Body = #{ stackTrace => stacktrace(S), 
+                  
+              errorType => E, 
+              errorMessage => R
+            },
+        
+    Json = jsx:encode(Body),
+        
+    Ref = gun:post(Pid, "/runtime/init/error", Headers, Json),
+        
+    {response, nofin, 200, _Headers} = gun:await(Pid, Ref1),
 
 %% ENV
 
