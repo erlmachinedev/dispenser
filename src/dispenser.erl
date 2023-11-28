@@ -116,7 +116,6 @@ process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
     try exec(Event, _Context = context(Headers))
     
     %% TODO Respond to the Lambda in a sync mode (report if status 413)
-    %% TODO Consider a dedicated state for SnapStart mode
     
     catch E:R:S -> 
         report(E, R, S)
