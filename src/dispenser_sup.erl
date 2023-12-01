@@ -15,11 +15,19 @@ start_child(Mod, Shutdown, Depth) ->
 	
 	A = [Mod, Shutdown, Depth],
 
-	Spec = #{ id => M, start => {M, F, A}, shutdown => 2000 },
+	Spec = #{ id => M, significant => true, shutdown => 2000, 
+			  
+			  restart => transient,
+			  start => {M, F, A}
+	        },
 
     supervisor:start_child(?MODULE,  Spec).
 
 init([]) ->
-	Flags = #{ strategy => one_for_one, intensity => 1, period => 5 },
+	Flags = #{ strategy => one_for_one, auto_shutdown => any_significant,
+			   
+			   intensity => 1,
+			   period => 5,
+	         },
 	
 	erlbox:success({Flags, _Procs = []}).
