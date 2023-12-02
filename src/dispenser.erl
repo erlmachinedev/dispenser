@@ -5,6 +5,8 @@
 -define(LAMBDA_TASK_ROOT, "LAMBDA_TASK_ROOT").
 -define(_HANDLER, "_HANDLER").
 
+-define(_X_AMZN_TRACE_ID, "_X_AMZN_TRACE_ID").
+
 -import(erlbox, [success/3, failure/1]).
 
 -export([boot/1, boot/2, boot/3]).
@@ -116,13 +118,29 @@ process(enter, _State, Data) ->
     {keep_state, NewData};
 
 process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
-    try exec(Event, _Context = context(Headers))
+    %% Perform ENV update os:putenv(?_X_AMZN_TRACE_ID, )
+    Cmd = fun () -> os:putenv(VarName, Value) end,
     
+    Mod = module(Data),
+    
+    Stream = true,
+    
+    %% TODO decode 
+    try exec(Data, Event, _Context = context(Headers)) of
+
+        %% TODO Inspect iterator callback_mode
+
+        Res when Stream -> 
+            submit(Mod, Pid, Res);
+        Res -> 
+            submit(Pid, Res)
     %% TODO Respond to the Lambda in a sync mode (report if status 413)
     
     catch E:R:S -> 
         report(E, R, S)
     end,
+
+    %% TODO Perform a garbage collection 
 
     {repeat_state, Data, []};
     
@@ -169,9 +187,13 @@ setup(Data) ->
 
 -spec exec(data(), event(), context()) -> binary().
 exec(Data, Event, Context) ->
+    %% TODO Perfrom decode via Module
     Mod = module(Data),
     
-    Mod:exec(Event, Context).
+    Res = Mod:exec(Event, Context),
+    
+    %% TODO Perfrom encode via module
+    Res.
     
 -spec stacktrace(data(), [term()]) -> [string()].
 stacktrace(Data, Term) ->
