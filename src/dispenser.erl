@@ -223,27 +223,6 @@ report(Pid, Path, E, R, S) ->
     
 %% Context
 
--spec function(context()) -> term().
-function(Context) ->
-    Key = <<"Lambda-Runtime-Invoked-Function-Arn">>,
-    
-    Res = maps:get(Key, Context),
-    Res.
-
--spec deadline(context()) -> integer().
-deadline(Context) ->
-    Key = <<"Lambda-Runtime-Deadline-Ms">>,
-    
-    Res = maps:get(Key, Context),
-    Res.
-
--spec request(context()) -> term().
-request(Context) ->
-    Key = <<"Lambda-Runtime-Aws-Request-Id">>,
-    
-    Res = maps:get(Key, Context),
-    Res.
-
 -spec context([term()]) -> context().
 context(Headers) -> 
     Res = #{},
