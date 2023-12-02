@@ -33,7 +33,7 @@ boot(Mod) ->
     boot(Mod, _Shutdown = fun init:stop/0).
 
 boot(Mod, Shutdown) ->
-    boot(Mod, Shutdown, _Depth = -1).
+    boot(Mod, Shutdown, _Opts = #{}).
 
 boot(Mod, Shutdown, Opts) when is_atom(Mod),
                                is_function(Shutdown),
@@ -71,10 +71,10 @@ start_link(Mod, Shutdown, Opts) ->
 
 %% gen_statem
 
--record(data, { module::module(), 
-                format::function(), shutdown::function(), 
-
-                connection::pid() 
+-record(data, { connection::pid(), shutdown::function(),
+                
+                module::module(),
+                format::function()
               }).
 
 -type data() :: #data{}.
@@ -123,7 +123,7 @@ process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
 
     {repeat_state, Data, []};
     
-process(info, {gun_response, _Pid, _Ref, _, _Status, _Headers}, Data) ->
+process(info, {gun_response, _Pid, _Ref, _, _Status = 500, _Headers}, Data) ->
    %% TODO Terminate the runtime
 
     stop;
@@ -131,12 +131,7 @@ process(info, {gun_response, _Pid, _Ref, _, _Status, _Headers}, Data) ->
 process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
     %% TODO Terminate the runtime
 
-    {stop, Reason, Data};
-
-process(_Type, Msg, Data) ->
-    ct:print("~p", Msg),
-    
-    {keep_state, Data, []}.
+    {stop, Reason, Data}.
 
 %%% Data
 
@@ -196,6 +191,10 @@ connect(URI) ->
     Res = Pid,
     Res.
 
+submit(Pid, Ret) ->
+    %% TODO Generate a runtime error (status, payload)
+    ok.
+
 report(Pid, Path, E, R, S) ->
     Headers = [{<<"content-type">>, <<"application/json">>}],
     
@@ -211,8 +210,10 @@ report(Pid, Path, E, R, S) ->
         
     {response, nofin, Code, _Headers} = gun:await(Pid, Ref1),
     
-    %% TODO Consider HTTP status as a return parameter
     %% TODO Print response body to console
+    %% TODO Inspect the status code
+    
+    %% TODO Generate a runtime error (status, payload)
     
     Res = Code,
     Res.
