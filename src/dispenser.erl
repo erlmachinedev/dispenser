@@ -76,10 +76,11 @@ start_link(Mod, Shutdown, Opts) ->
 
 %% gen_statem
 
--record(data, { connection::pid(), shutdown::function(),
+-record(data, { connection::pid(), module::module(), format::function(),
+            
+                streaming::boolean(),
                 
-                module::module(),
-                format::function()
+                shutdown::function()
               }).
 
 -type data() :: #data{}.
@@ -119,23 +120,19 @@ process(enter, _State, Data) ->
 
 process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
     %% Perform ENV update os:putenv(?_X_AMZN_TRACE_ID, )
-    Cmd = fun () -> os:putenv(VarName, Value) end,
+    os:putenv(VarName, Value),
     
-    Mod = module(Data),
+    Flag = streaming(Data),
     
-    Stream = true,
-    
-    %% TODO decode 
     try exec(Data, Event, _Context = context(Headers)) of
 
         %% TODO Inspect iterator callback_mode
 
         Res when Stream -> 
-            submit(Mod, Pid, Res);
+            stream(Data, _I = iterator(Data, Res));
         Res -> 
-            submit(Pid, Res)
-    %% TODO Respond to the Lambda in a sync mode (report if status 413)
-    
+            submit(Data, Res)
+
     catch E:R:S -> 
         report(E, R, S)
     end,
@@ -158,7 +155,11 @@ process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
 
 -spec data(module(), function(), function()) -> data().
 data(Mod, Shutdown, Format) ->
-    #data{ module = Mod, shutdown = Shutdown, format = Format }.
+    #data{ module = Mod, shutdown = Shutdown, 
+        
+           format = Format, 
+           streaming = erlang:function_exported(Mod, iterator, 1])
+         }.
 
 -spec connection(data(), pid()) -> data().
 connection(Data, Pid) ->
@@ -167,6 +168,11 @@ connection(Data, Pid) ->
 -spec connection(data()) -> pid().
 connection(Data) ->
     Res = Data#data.connection,
+    Res.
+
+-spec streaming(data()) -> boolean().
+streaming(Data) ->
+    Res = Data#data.streaming,
     Res.
 
 -spec module(data()) -> module().
@@ -216,8 +222,13 @@ connect(URI) ->
     Res = Pid,
     Res.
 
-submit(Pid, Ret) ->
+stream(Data, Ret) ->
     %% TODO Generate a runtime error (status, payload)
+    ok.
+
+submit(Data, Ret) ->
+    %% TODO Generate a runtime error (status, payload)
+    %% TODO Respond to the Lambda in a sync mode (report if status 413)
     ok.
 
 report(Pid, Path, E, R, S) ->
