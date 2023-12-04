@@ -97,9 +97,9 @@ init(Data) ->
     end.
 
 terminate(Reason, _State, Data) ->
-    Fun = shutdown(Data, Reason),
-
-    Fun().
+    Fun = shutdown(Data),
+    
+    Fun(Reason).
 
 callback_mode() -> [state_functions, state_enter].
 
@@ -160,24 +160,20 @@ connection(Data, Pid) ->
 
 -spec connection(data()) -> pid().
 connection(Data) ->
-    Res = Data#data.connection,
-    Res.
-
--spec streaming(data()) -> boolean().
-streaming(Data) ->
-    Res = Data#data.streaming,
-    Res.
+    Data#data.connection.
 
 -spec module(data()) -> module().
 module(Data) ->
-    Res = Data#data.module,
-    Res.
+    Data#data.module.
 
 -spec format(data()) -> function().
 format(Data) ->
-    Res = Data#data.format,
-    Res.
+    Data#data.format.
 
+-spec shutdown(data()) -> function().
+shutdown(Data) ->
+    Data#data.shutdown.
+    
 -spec setup(data()) -> success().
 setup(Data) ->
     Mod = module(Data),
