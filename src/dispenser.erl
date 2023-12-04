@@ -118,12 +118,10 @@ process(enter, _State, Data) ->
     {keep_state, NewData};
 
 process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
-
     try exec(Data, Event, _Context = context(Headers)) of
 
-        Res -> 
-            I = iterator(Data, Res),
-            
+        Res -> I = iterator(Data, Res),
+        
             if I -> 
                 stream(Data, _I = iterator(Data, Res));
             true ->
@@ -137,7 +135,6 @@ process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
         %% Perform ENV update os:putenv(?_X_AMZN_TRACE_ID, )
         os:putenv(VarName, Value)
     end,
-
     %% TODO Perform a garbage collection 
 
     {repeat_state, Data, []};
