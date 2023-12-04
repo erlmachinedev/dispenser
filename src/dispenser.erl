@@ -76,11 +76,10 @@ start_link(Mod, Shutdown, Opts) ->
 
 %% gen_statem
 
--record(data, { connection::pid(), module::module(), format::function(),
-            
-                streaming::boolean(),
-                
-                shutdown::function()
+-record(data, { connection::pid(), 
+                shutdown::function(), format::function(),
+
+                module::module()
               }).
 
 -type data() :: #data{}.
@@ -119,22 +118,24 @@ process(enter, _State, Data) ->
     {keep_state, NewData};
 
 process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
-    %% Perform ENV update os:putenv(?_X_AMZN_TRACE_ID, )
-    os:putenv(VarName, Value),
-    
-    Flag = streaming(Data),
-    
+
     try exec(Data, Event, _Context = context(Headers)) of
 
-        %% TODO Inspect iterator callback_mode
-
-        Res when Stream -> 
-            stream(Data, _I = iterator(Data, Res));
         Res -> 
-            submit(Data, Res)
+            I = iterator(Data, Res),
+            
+            if I -> 
+                stream(Data, _I = iterator(Data, Res));
+            true ->
+                submit(Data, Res) 
+            end
 
     catch E:R:S -> 
         report(E, R, S)
+        
+    after
+        %% Perform ENV update os:putenv(?_X_AMZN_TRACE_ID, )
+        os:putenv(VarName, Value)
     end,
 
     %% TODO Perform a garbage collection 
@@ -155,10 +156,8 @@ process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
 
 -spec data(module(), function(), function()) -> data().
 data(Mod, Shutdown, Format) ->
-    #data{ module = Mod, shutdown = Shutdown, 
-        
-           format = Format, 
-           streaming = erlang:function_exported(Mod, iterator, 1])
+    #data{ module = Mod,
+           format = Format, shutdown = Shutdown
          }.
 
 -spec connection(data(), pid()) -> data().
