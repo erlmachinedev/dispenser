@@ -13,8 +13,6 @@
 
 -export([start_link/3]).
 
--export([encode/1, encode/2, decode/1, decode/2]).
-
 -export([init/1]).
 -export([terminate/3]).
 -export([callback_mode/0]).
@@ -59,27 +57,24 @@ decode(Json) ->
 decode(Json, Opts) ->
     jsx:decode(Json, Opts).
 
-name() ->
-    ?MODULE.
-
 -spec start_link(module(), function(), map()) -> success(pid()).
 start_link(Mod, Shutdown, Opts) ->
-    Name = name(),
+    Name = ?MODULE,
     
-    Format = fun (E, R, S) -> erl_error:format_exception(E, R, S, Opts) end,
+    Format = fun (E, R, S) -> erl_error:format_exception(E, R, S, Opts) 
+    
+             end,
 
     Data = data(Mod, Shutdown, Format),
     
-    Time = 10000,
-    
-    gen_statem:start_link({local, Name}, ?MODULE, Data, [{timeout, Time}]).
+    gen_statem:start_link({local, Name}, ?MODULE, Data, []).
 
 %% gen_statem
 
--record(data, { connection::pid(), 
-                shutdown::function(), format::function(),
-
-                module::module()
+-record(data, { connection::pid(), format::function(),
+                module::module(),
+                
+                shutdown::function()
               }).
 
 -type data() :: #data{}.
@@ -120,8 +115,9 @@ process(enter, _State, Data) ->
 process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
     try exec(Data, Event, _Context = context(Headers)) of
 
-        Res -> I = iterator(Data, Res),
-        
+        Res -> 
+            I = iterator(Data, Res),
+            
             if I -> 
                 stream(Data, _I = iterator(Data, Res));
             true ->
@@ -135,6 +131,7 @@ process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
         %% Perform ENV update os:putenv(?_X_AMZN_TRACE_ID, )
         os:putenv(VarName, Value)
     end,
+    
     %% TODO Perform a garbage collection 
 
     {repeat_state, Data, []};
