@@ -145,28 +145,32 @@ process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
 
 -spec setup(module()) -> function().
 setup(Mod) ->
-    fun () -> callback(Mod, setup, []) end.
+    Def = fun () -> erlang:error(not_implemented, []) end,
+    
+    fun () -> callback(Mod, setup, [], Def) end.
 
 -spec decode(module()) -> function().    
 decode(Mod) ->
-    Def = jsx:decode(Json, []),
+    Def = fun (Json) -> jsx:decode(Json, []) end,
     
     fun (Json) -> callback(Mod, decode, [Json], Def) end.
 
 -spec encode(module()) -> function().    
 encode(Mod) ->
-    Def = jsx:encode(Term, []),
+    Def = fun (Term) -> jsx:encode(Term, []) end,
     
     fun (Term) -> callback(Mod, encode, [Term], Def) end.
 
 -spec exec(module()) -> function().
 exec(Mod) ->
+    Def = fun (Json, Context) -> erlang:error(not_implemented, [Json, Context]) end,
+    
     Enc = encode(Mod),
     Dec = decode(Mod),
     
     fun (Json, Context) -> Event = Dec(Json),
                                    
-                           Res = callback(Mod, exec, [Event, Context]),
+                           Res = callback(Mod, exec, [Event, Context], Def),
                                   
                            Enc(Res)
     end.
@@ -181,6 +185,8 @@ iterator(Mod) ->
 
 -spec next(module()) -> function().
 next(Mod) ->
+    Def = fun (I) -> erlang:error(not_implemented, [I]) end,
+    
     Res = fun (I) -> callback(Mod, next, [I]) end,
     Res.
 
