@@ -7,7 +7,7 @@
 
 -define(_X_AMZN_TRACE_ID, "_X_AMZN_TRACE_ID").
 
--import(erlbox, [success/3, failure/1]).
+-import(erlbox, [success/3, failure/1, optional_callback/4]).
 
 -export([boot/1, boot/2, boot/3]).
 
@@ -45,18 +45,6 @@ boot(Mod, Shutdown, Opts) when is_atom(Mod),
                                 
     dispenser_sup:start_child(Mod, Shutdown, Opts).
 
-encode(Term) ->
-    encode(Term, []).
-
-encode(Term, Opts) ->
-    jsx:encode(Term, Opts).
-    
-decode(Json) ->
-    decode(Json, []).
-
-decode(Json, Opts) ->
-    jsx:decode(Json, Opts).
-
 -spec start_link(module(), function(), map()) -> success(pid()).
 start_link(Mod, Shutdown, Opts) ->
     Name = ?MODULE,
@@ -65,30 +53,35 @@ start_link(Mod, Shutdown, Opts) ->
     
              end,
 
-    Data = data(Mod, Shutdown, Format),
+    Args = [Mod, Shutdown, Format],
     
-    gen_statem:start_link({local, Name}, ?MODULE, Data, []).
+    gen_statem:start_link({local, Name}, ?MODULE, Args, []).
 
 %% gen_statem
 
--record(data, { connection::pid(), format::function(),
-                module::module(),
+-record(data, { connection::pid(), format::function(), shutdown::function(),
+
+                iterator::function(),
+                next::function(), 
                 
-                shutdown::function()
+                setup::function(),
+                exec::function()
               }).
 
 -type data() :: #data{}.
 
-init(Data) ->
+init([Mod, Shutdown, Format]) ->
     process_flag(sensitive, true),
     
     Pid = connect(_URI = uri()),
     
     monitor(process, Pid),
 
+    Data = data(Mod, Pid, Shutdown, Format),
+
     try setup(Data),
     
-        success(process, connection(Data, Pid), [])
+        success(process, Data, [])
     
     catch E:R:S -> 
         report(Pid, _Path = "/runtime/init/error", E, R, S),
@@ -148,23 +141,72 @@ process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
 
 %%% Data
 
--spec data(module(), function(), function()) -> data().
-data(Mod, Shutdown, Format) ->
-    #data{ module = Mod,
-           format = Format, shutdown = Shutdown
-         }.
+-spec setup(module()) -> function().
+setup(Mod) ->
+    fun () -> callback(Mod, setup, []) end.
 
--spec connection(data(), pid()) -> data().
-connection(Data, Pid) ->
-    Data#data{ connection = Pid }.
+-spec decode(module()) -> function().    
+decode(Mod) ->
+    Def = jsx:decode(Json, []),
+    
+    fun (Json) -> callback(Mod, decode, [Json], Def) end.
+
+-spec encode(module()) -> function().    
+encode(Mod) ->
+    Def = jsx:encode(Term, []),
+    
+    fun (Term) -> callback(Mod, encode, [Term], Def) end.
+
+-spec exec(module()) -> function().
+exec(Mod) ->
+    Enc = encode(Mod),
+    Dec = decode(Mod),
+    
+    fun (Json, Context) -> Event = Dec(Json),
+                                   
+                           Res = callback(Mod, exec, [Event, Context]),
+                                  
+                           Enc(Res)
+    end.
+
+
+-spec iterator(module()) -> function().
+iterator(Mod) ->
+    Def = fun (_) -> false end,
+    
+    Res = fun (Json) -> callback(Mod, iterator, [Json], Def) end,
+    Res.
+
+-spec next(module()) -> function().
+next(Mod) ->
+    Res = fun (I) -> callback(Mod, next, [I]) end,
+    Res.
+
+-spec data(module(), pid(), function(), function()) -> data().
+data(Mod, Pid, Shutdown, Format) ->
+    I = iterator(Mod), Next = next(Mod),
+    
+    Setup = setup(Mod),
+    Exec = exec(Mod),
+    
+    #data{ format = Format, shutdown = Shutdown, connection = Pid,
+           
+           iterator = I,
+           next = Next,
+           
+           setup = Setup,
+        
+           exec = Exec
+         }.
 
 -spec connection(data()) -> pid().
 connection(Data) ->
     Data#data.connection.
 
--spec module(data()) -> module().
-module(Data) ->
-    Data#data.module.
+iterator(Mod, Term) ->
+    fun (Term) -> optional_callback(Mod, _Fun = iterator, Term, false) 
+    
+    end.
 
 -spec format(data()) -> function().
 format(Data) ->
@@ -180,9 +222,9 @@ setup(Data) ->
     
     Mod:setup().
 
--spec exec(data(), event(), context()) -> binary().
-exec(Data, Event, Context) ->
-    %% TODO Perfrom decode via Module
+-spec exec(data()) -> binary().
+exec(Data) ->
+    fun %% TODO Perfrom decode via Module
     Mod = module(Data),
     
     Res = Mod:exec(Event, Context),
@@ -233,15 +275,17 @@ report(Pid, Path, E, R, S) ->
         
     Ref = gun:post(Pid, Path, Headers, Json),
         
-    {response, nofin, Code, _Headers} = gun:await(Pid, Ref1),
+    {response, nofin, Code, Headers} = gun:await(Pid, Ref),
     
+    Res = gun:await(Pid, Ref),
+    
+    T = "~p",
+    
+    ct:print(T, [Code, Headers, Res]).
     %% TODO Print response body to console
     %% TODO Inspect the status code
     
     %% TODO Generate a runtime error (status, payload)
-    
-    Res = Code,
-    Res.
     
 %% Context
 
