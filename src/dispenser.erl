@@ -25,6 +25,8 @@
 
 -include_lib("erlbox/include/erlbox.hrl").
 
+-type iterator() :: term().
+
 -type context() :: map().
 
 %% NOTE Client can generate more readable runtime exceptions via erlang:error/3 
@@ -203,10 +205,30 @@ data(Mod, Pid, Shutdown, Format) ->
 connection(Data) ->
     Data#data.connection.
 
-iterator(Mod, Term) ->
-    fun (Term) -> optional_callback(Mod, _Fun = iterator, Term, false) 
+-spec setup(data()) -> success().
+setup(Data) ->
+    Fun = Data#data.setup,
     
-    end.
+    Fun().
+
+-spec exec(data(), iodata(), context()) -> iodata().
+exec(Data, Json, Context) ->
+    Fun = Data#data.exec,
+    
+    Fun(Json, Context).
+
+-spec iterator(data(), iodata()) -> iterator().
+iterator(Data, Json) ->
+    Fun = Data#data.iterator,
+    
+    Fun(Json).
+
+%% TODO Fix the return type
+-spec next(data(), iterator()) -> {iodata(), iterator()} | none.
+next(Data, I) ->
+    Fun = Data#data.next,
+    
+    Fun(I).
 
 -spec format(data()) -> function().
 format(Data) ->
