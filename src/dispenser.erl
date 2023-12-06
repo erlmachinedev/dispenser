@@ -88,7 +88,7 @@ init([Mod, Shutdown, Format]) ->
         success(process, Data, [])
     
     catch E:R:S -> 
-        report(Pid, _Path = "/runtime/init/error", E, R, S),
+        report(Pid, _Path = "/2018-06-01/runtime/init/error", E, R, S),
         
         failure(R)
     end.
@@ -105,6 +105,7 @@ callback_mode() -> [state_functions, state_enter].
 process(enter, _State, Data) ->
     Pid = connection(Data),
     
+    %% TODO Provide a function naming
     gun:get(Pid, _Path = "/2018-06-01/runtime/invocation/next"),
     
     {keep_state, Data};
@@ -113,16 +114,20 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
     try exec(Data, _Event = event(Pid, Ref), context(Headers)) of
 
         Json ->
+            Path = path(["/2018-06-01/runtime/invocation/", Req, "/response"]),
+            
             I = iterator(Data, Json),
 
             if I -> 
-                stream(Data, _I = next(Data, I), Headers);
+                stream(Data, _I = next(Data, I), Path);
             true ->
-                submit(Data, Json, Headers) 
+                submit(Data, Json, Path) 
             end
 
     catch E:R:S -> 
-        report(E, R, S)
+        Path = path(["/2018-06-01/runtime/invocation/", Req, "/error"]),
+        
+        report(Pid, Path, E, R, S)
         
     after
         %% Perform ENV update os:putenv(?_X_AMZN_TRACE_ID, )
@@ -274,14 +279,11 @@ connect(URI) ->
     Res.
 
 path(Headers) ->
-    Key = <<"lambda-runtime-aws-request-id">>,
+    ReqId = proplists:get_value(<<"lambda-runtime-aws-request-id">>, Headers),
     
-    AwsRequestId = proplists:get_value(Key, Headers),
+    Path = ["/2018-06-01/runtime/invocation/", ReqId, "/response"],
 
-    Path = ["/2018-06-01/runtime/invocation/", AwsRequestId, "/response"],
-
-    Res = unicode:characters_to_list(Path),
-    Res.
+    unicode:characters_to_list(Path).
 
 stream(Data, I, Headers) ->
     Path = path(Headers),
@@ -298,7 +300,11 @@ submit(Data, Json, Headers) ->
  
     {response, _IsFin, Code, _} = Res,
     
-    Code == 202 orelse error(Code).
+    Code == 202 orelse error(Code),
+    
+    %% TODO Check the pressence of a message
+    
+    gun:flush(Ref).
 
 report(Pid, Path, E, R, S) ->
     Headers = [{<<"content-type">>, <<"application/json">>}],
@@ -327,7 +333,7 @@ report(Pid, Path, E, R, S) ->
 
 %% Event
     
-event() ->
+event(Pid, Ref) ->
     {ok, Body} = gun:await_body(Pid, Ref),
     
     Res = Body,
