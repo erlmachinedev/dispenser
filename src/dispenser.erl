@@ -9,6 +9,8 @@
 
 -import(erlbox, [success/3, failure/1, optional_callback/4]).
 
+-import(erlang, [error/2]).
+
 -export([boot/1, boot/2, boot/3]).
 
 -export([start_link/3]).
@@ -103,20 +105,20 @@ callback_mode() -> [state_functions, state_enter].
 process(enter, _State, Data) ->
     Pid = connection(Data),
     
-    Ref = gun:get(Pid, "/2018-06-01/runtime/invocation/next"),
+    gun:get(Pid, _Path = "/2018-06-01/runtime/invocation/next"),
     
-    {keep_state, NewData};
+    {keep_state, Data};
 
-process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
-    try exec(Data, Event, _Context = context(Headers)) of
+process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
+    try exec(Data, _Event = event(Pid, Ref), context(Headers)) of
 
-        Res -> 
+        Res ->
             I = iterator(Data, Res),
-            
+
             if I -> 
-                stream(Data, _I = iterator(Data, Res));
+                stream(Data, _I = next(Data, I), Headers);
             true ->
-                submit(Data, Res) 
+                submit(Data, Res, Headers) 
             end
 
     catch E:R:S -> 
@@ -145,25 +147,25 @@ process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
 
 -spec setup(module()) -> function().
 setup(Mod) ->
-    Def = fun () -> erlang:error(not_implemented, []) end,
+    Def = fun () -> error(not_implemented) end,
     
     fun () -> callback(Mod, setup, [], Def) end.
 
 -spec decode(module()) -> function().    
 decode(Mod) ->
-    Def = fun (Json) -> jsx:decode(Json, []) end,
+    Def = fun (Json) -> jsx:decode(Json) end,
     
     fun (Json) -> callback(Mod, decode, [Json], Def) end.
 
 -spec encode(module()) -> function().    
 encode(Mod) ->
-    Def = fun (Term) -> jsx:encode(Term, []) end,
+    Def = fun (Term) -> jsx:encode(Term) end,
     
     fun (Term) -> callback(Mod, encode, [Term], Def) end.
 
 -spec exec(module()) -> function().
 exec(Mod) ->
-    Def = fun (Json, Context) -> erlang:error(not_implemented, [Json, Context]) end,
+    Def = fun (Json, Context) -> error(not_implemented, [Json, Context]) end,
     
     Enc = encode(Mod),
     Dec = decode(Mod),
@@ -185,7 +187,7 @@ iterator(Mod) ->
 
 -spec next(module()) -> function().
 next(Mod) ->
-    Def = fun (I) -> erlang:error(not_implemented, [I]) end,
+    Def = fun (I) -> error(not_implemented, [I]) end,
     
     Res = fun (I) -> callback(Mod, next, [I]) end,
     Res.
@@ -250,16 +252,6 @@ setup(Data) ->
     
     Mod:setup().
 
--spec exec(data()) -> binary().
-exec(Data) ->
-    fun %% TODO Perfrom decode via Module
-    Mod = module(Data),
-    
-    Res = Mod:exec(Event, Context),
-    
-    %% TODO Perfrom encode via module
-    Res.
-    
 -spec stacktrace(data(), [term()]) -> [string()].
 stacktrace(Data, Term) ->
     Fun = format(Data), true = is_function(Fun),
@@ -281,11 +273,29 @@ connect(URI) ->
     Res = Pid,
     Res.
 
-stream(Data, Ret) ->
-    %% TODO Generate a runtime error (status, payload)
-    ok.
+path(Headers) ->
+    Key = <<"lambda-runtime-aws-request-id">>,
+    
+    AwsRequestId = proplists:get_value(Key, Headers),
 
-submit(Data, Ret) ->
+    Path = ["/2018-06-01/runtime/invocation/", AwsRequestId, "/response"],
+
+    Res = unicode:characters_to_list(Path),
+    Res.
+
+stream(Data, I, Headers) ->
+    Path = path(Headers),
+    
+    %% TODO Generate a runtime error (status, payload)
+    
+    error(not_implemented, [I, Headers]).
+
+submit(Data, Res, Headers) ->
+    Pid = connection(Data),
+    
+    Ref = gun:post(Pid, _Path = path(Headers), [], Res),
+    Res = gun:await(Pid, Ref),
+ 
     %% TODO Generate a runtime error (status, payload)
     %% TODO Respond to the Lambda in a sync mode (report if status 413)
     ok.
@@ -314,6 +324,14 @@ report(Pid, Path, E, R, S) ->
     %% TODO Inspect the status code
     
     %% TODO Generate a runtime error (status, payload)
+
+%% Event
+    
+event() ->
+    {ok, Body} = gun:await_body(Pid, Ref),
+    
+    Res = Body,
+    Res.
     
 %% Context
 
