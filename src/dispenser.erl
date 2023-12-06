@@ -112,13 +112,13 @@ process(enter, _State, Data) ->
 process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
     try exec(Data, _Event = event(Pid, Ref), context(Headers)) of
 
-        Res ->
-            I = iterator(Data, Res),
+        Json ->
+            I = iterator(Data, Json),
 
             if I -> 
                 stream(Data, _I = next(Data, I), Headers);
             true ->
-                submit(Data, Res, Headers) 
+                submit(Data, Json, Headers) 
             end
 
     catch E:R:S -> 
@@ -290,15 +290,15 @@ stream(Data, I, Headers) ->
     
     error(not_implemented, [I, Headers]).
 
-submit(Data, Res, Headers) ->
+submit(Data, Json, Headers) ->
     Pid = connection(Data),
     
-    Ref = gun:post(Pid, _Path = path(Headers), [], Res),
+    Ref = gun:post(Pid, _Path = path(Headers), [], Json),
     Res = gun:await(Pid, Ref),
  
-    %% TODO Generate a runtime error (status, payload)
-    %% TODO Respond to the Lambda in a sync mode (report if status 413)
-    ok.
+    {response, _IsFin, Code, _} = Res,
+    
+    Code == 202 orelse error(Code).
 
 report(Pid, Path, E, R, S) ->
     Headers = [{<<"content-type">>, <<"application/json">>}],
