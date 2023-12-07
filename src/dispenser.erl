@@ -88,7 +88,7 @@ init([Mod, Shutdown, Format]) ->
         success(process, Data, [])
     
     catch E:R:S -> 
-        report(Pid, _Path = "/2018-06-01/runtime/init/error", E, R, S),
+        report(Pid, _Path = "/init/error", E, R, S),
         
         failure(R)
     end.
@@ -106,7 +106,7 @@ process(enter, _State, Data) ->
     Pid = connection(Data),
     
     %% TODO Provide a function naming
-    gun:get(Pid, _Path = "/2018-06-01/runtime/invocation/next"),
+    gun:get(Pid, _Path = "/invocation/next"),
     
     {keep_state, Data};
 
@@ -114,7 +114,7 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
     try exec(Data, _Event = event(Pid, Ref), context(Headers)) of
 
         Json ->
-            Path = path(["/2018-06-01/runtime/invocation/", Req, "/response"]),
+            Path = path(Headers, "/response"),
             
             I = iterator(Data, Json),
 
@@ -124,10 +124,8 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
                 submit(Data, Json, Path) 
             end
 
-    catch E:R:S -> 
-        Path = path(["/2018-06-01/runtime/invocation/", Req, "/error"]),
-        
-        report(Pid, Path, E, R, S)
+    catch E:R:S ->
+        report(Pid, _Path = path(Headers, "/error"), E, R, S)
         
     after
         %% Perform ENV update os:putenv(?_X_AMZN_TRACE_ID, )
