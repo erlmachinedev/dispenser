@@ -27,61 +27,62 @@
 
 -include_lib("erlbox/include/erlbox.hrl").
 
+-type connection() :; pid().
+-type command() :: fun(() -> success()).
+
 -type iterator() :: term().
 
--type context() :: map().
-
 %% NOTE Client can generate more readable runtime exceptions via erlang:error/3 
-%% TODO Setup the trace id
 
 %%% API
 
 boot(Mod) ->
-    boot(Mod, _Shutdown = fun init:stop/0).
+    boot(Mod, [_Command = fun garbage_collect/0]).
 
-boot(Mod, Shutdown) ->
-    boot(Mod, Shutdown, _Opts = #{}).
+boot(Mod, Commands) ->
+    boot(Mod, Commands, _Shutdown = fun init:stop/0).
 
-boot(Mod, Shutdown, Opts) when is_atom(Mod),
-                               is_function(Shutdown),
+-spec boot(module(), [command()], command()) -> success(pid()).
+boot(Mod, Commands, Shutdown) when is_atom(Mod),
+                                   is_list(Commands),
+                                         
+                                   is_function(Shutdown) ->
                                 
-                               is_map(Opts) ->
-                                
-    dispenser_sup:start_child(Mod, Shutdown, Opts).
+    dispenser_sup:start_child(Mod, Commands, Shutdown).
 
--spec start_link(module(), function(), map()) -> success(pid()).
-start_link(Mod, Shutdown, Opts) ->
+-spec start_link(module(), [command()], command()) -> success(pid()).
+start_link(Mod, Commands, Shutdown) ->
     Name = ?MODULE,
     
-    Format = fun (E, R, S) -> erl_error:format_exception(E, R, S, Opts) 
-    
-             end,
-
-    Args = [Mod, Shutdown, Format],
+    Args = [Mod, Commands, Shutdown],
     
     gen_statem:start_link({local, Name}, ?MODULE, Args, []).
 
 %% gen_statem
 
--record(data, { connection::pid(), format::function(), shutdown::function(),
+-record(data, { connection::connection(), commands::[command()],
+
+                shutdown::command(),
 
                 iterator::function(),
                 next::function(), 
                 
                 setup::function(),
-                exec::function()
+                exec::function(),
+                
+                exception::function()
               }).
 
 -type data() :: #data{}.
 
-init([Mod, Shutdown, Format]) ->
+init([Mod, Commands, Shutdown]) ->
     process_flag(sensitive, true),
     
     Pid = connect(_URI = uri()),
     
     monitor(process, Pid),
 
-    Data = data(Mod, Pid, Shutdown, Format),
+    Data = data(Mod, Pid, Commands, Shutdown),
 
     try setup(Data),
     
@@ -106,7 +107,7 @@ process(enter, _State, Data) ->
     Pid = connection(Data),
     
     %% TODO Provide a function naming
-    gun:get(Pid, _Path = "/invocation/next"),
+    invocation(Pid, _Path = "/invocation/next"),
     
     {keep_state, Data};
 
@@ -128,11 +129,17 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
         report(Pid, _Path = path(Headers, "/error"), E, R, S)
         
     after
-        %% Perform ENV update os:putenv(?_X_AMZN_TRACE_ID, )
+        %% TODO Perform ENV update os:putenv(?_X_AMZN_TRACE_ID, )
+        %% TODO Perform a garbage collection 
         os:putenv(VarName, Value)
-    end,
+        
+        [ begin ok = Command(),
+                ok
+                
+          end || Command <- commands(Data) 
+        ]
     
-    %% TODO Perform a garbage collection 
+    end,
 
     {repeat_state, Data, []};
     
@@ -195,21 +202,30 @@ next(Mod) ->
     Res = fun (I) -> callback(Mod, next, [I]) end,
     Res.
 
--spec data(module(), pid(), function(), function()) -> data().
+exception() ->
+    Def = fun (E, R, S) -> erl_error:format_exception(E, R, S) end,
+    
+    Res = fun (E, R, S) -> callback(Mod, exception, [E, R, S]) end,
+    Res.
+
+-spec data(module(), pid(), [command()], command()) -> data().
 data(Mod, Pid, Shutdown, Format) ->
     I = iterator(Mod), Next = next(Mod),
     
     Setup = setup(Mod),
     Exec = exec(Mod),
     
-    #data{ format = Format, shutdown = Shutdown, connection = Pid,
+    Exception = exception(Mod),
+
+    #data{ commands = Commands, shutdown = Shutdown, connection = Pid,
            
            iterator = I,
            next = Next,
            
            setup = Setup,
-        
-           exec = Exec
+           exec = Exec,
+           
+           exception = Exception
          }.
 
 -spec connection(data()) -> pid().
