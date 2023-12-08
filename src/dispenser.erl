@@ -7,9 +7,9 @@
 
 -define(_X_AMZN_TRACE_ID, "_X_AMZN_TRACE_ID").
 
--import(erlbox, [success/3, failure/1, optional_callback/4]).
+-import(erlbox, [success/3, failure/1, callback/4]).
 
--import(erlang, [error/2]).
+-import(erlang, [error/2, garbage_collect/0]).
 
 -export([boot/1, boot/2, boot/3]).
 
@@ -27,8 +27,8 @@
 
 -include_lib("erlbox/include/erlbox.hrl").
 
--type connection() :; pid().
--type command() :: fun(() -> success()).
+-type connection() :: pid().
+-type command() :: function(() -> ok).
 
 -type iterator() :: term().
 
@@ -37,12 +37,12 @@
 %%% API
 
 boot(Mod) ->
-    boot(Mod, [_Command = fun garbage_collect/0]).
+    boot(Mod, [_Command = fun () -> garbage_collect(), ok end]).
 
 boot(Mod, Commands) ->
     boot(Mod, Commands, _Shutdown = fun init:stop/0).
 
--spec boot(module(), [command()], command()) -> success(pid()).
+-spec boot(module(), [command()], function()) -> success(pid()).
 boot(Mod, Commands, Shutdown) when is_atom(Mod),
                                    is_list(Commands),
                                          
@@ -50,7 +50,7 @@ boot(Mod, Commands, Shutdown) when is_atom(Mod),
                                 
     dispenser_sup:start_child(Mod, Commands, Shutdown).
 
--spec start_link(module(), [command()], command()) -> success(pid()).
+-spec start_link(module(), [command()], function()) -> success(pid()).
 start_link(Mod, Commands, Shutdown) ->
     Name = ?MODULE,
     
@@ -62,7 +62,7 @@ start_link(Mod, Commands, Shutdown) ->
 
 -record(data, { connection::connection(), commands::[command()],
 
-                shutdown::command(),
+                shutdown::function(),
 
                 iterator::function(),
                 next::function(), 
@@ -129,16 +129,12 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
         report(Pid, _Path = path(Headers, "/error"), E, R, S)
         
     after
-        %% TODO Perform ENV update os:putenv(?_X_AMZN_TRACE_ID, )
-        %% TODO Perform a garbage collection 
-        os:putenv(VarName, Value)
-        
         [ begin ok = Command(),
                 ok
                 
-          end || Command <- commands(Data) 
+          end || Command <- commands(Data)
         ]
-    
+        
     end,
 
     {repeat_state, Data, []};
@@ -208,8 +204,8 @@ exception() ->
     Res = fun (E, R, S) -> callback(Mod, exception, [E, R, S]) end,
     Res.
 
--spec data(module(), pid(), [command()], command()) -> data().
-data(Mod, Pid, Shutdown, Format) ->
+-spec data(module(), pid(), [command()], function()) -> data().
+data(Mod, Pid, Commands, Shutdown) ->
     I = iterator(Mod), Next = next(Mod),
     
     Setup = setup(Mod),
@@ -250,7 +246,6 @@ iterator(Data, Json) ->
     
     Fun(Json).
 
-%% TODO Fix the return type
 -spec next(data(), iterator()) -> {iodata(), iterator()} | none.
 next(Data, I) ->
     Fun = Data#data.next,
