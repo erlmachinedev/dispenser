@@ -164,8 +164,8 @@ callback(encode, Mod) ->
 callback(exec, Mod) ->
     Def = fun (Json, Context) -> error(not_implemented, [Json, Context]) end,
     
-    Enc = encode(Mod),
-    Dec = decode(Mod),
+    Enc = callback(encode, Mod),
+    Dec = callback(encode, Mod),
     
     fun (Json, Context) -> Event = Dec(Json),
                            Res = callback(Mod, exec, [Event, Context], Def),
