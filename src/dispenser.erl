@@ -5,8 +5,9 @@
 -define(LAMBDA_TASK_ROOT, "LAMBDA_TASK_ROOT").
 -define(_HANDLER, "_HANDLER").
 
--import(erlbox, [success/3, failure/1, callback/4]).
--import(erlang, [error/2, garbage_collect/0]).
+-import(erlbox, [success/3, failure/1, callback/3, callback/4]).
+
+-import(erlang, [error/1, error/2]).
 
 -export([boot/1, boot/2, boot/3]).
 
@@ -25,16 +26,14 @@
 -include_lib("erlbox/include/erlbox.hrl").
 
 -type connection() :: pid().
--type command() :: function(() -> ok).
+-type command() :: fun(() -> ok).
 
 -type iterator() :: term().
-
-%% NOTE Client can generate more readable runtime exceptions via erlang:error/3 
 
 %%% API
 
 boot(Mod) ->
-    Command = fun () -> garbage_collect(), ok end,
+    Command = fun () -> erlang:garbage_collect(), ok end,
 
     boot(Mod, [Command]).
 
@@ -151,7 +150,7 @@ callback(setup, Mod) ->
     
     fun () -> callback(Mod, setup, [], Def) end;
     
-callback(decode, Mod)) ->
+callback(decode, Mod) ->
     Def = fun (Json) -> jsx:decode(Json) end,
     
     fun (Json) -> callback(Mod, decode, [Json], Def) end;
@@ -221,7 +220,7 @@ setup(Data) ->
     
     Fun().
 
--spec exec(data(), iodata(), context()) -> iodata().
+-spec exec(data(), iodata(), map()) -> iodata().
 exec(Data, Json, Context) ->
     Fun = Data#data.exec,
     
@@ -247,8 +246,7 @@ shutdown(Data) ->
 exception(Data, E, R, Stacktrace) ->
     Fun = exception(Data),
     
-    Res = Fun(E, R, Stacktrace),
-    Res.
+    Fun(E, R, Stacktrace).
 
 %% HTTP
 
@@ -327,10 +325,9 @@ event(Pid, Ref) ->
     
 %% Context
 
--spec context([term()]) -> context().
+-spec context([term()]) -> map().
 context(Headers) -> 
-    Res = #{},
-    Res.
+    maps:from_list(Headers).
 
 %% ENV
 
@@ -338,15 +335,13 @@ context(Headers) ->
 uri() -> 
     Env = os:getenv(?AWS_LAMBDA_RUNTIME_API),
     
-    Res = uri_string:parse(_Uri = lists:append("http://", Env)),
-    Res.
+    URI = lists:append("http://", Env),
+    
+    uri_string:parse(URI).
     
 -spec root() -> file:filename().
 root() ->
-    Env = os:getenv(?LAMBDA_TASK_ROOT),
-    
-    Res = Env,
-    Res.
+    os:getenv(?LAMBDA_TASK_ROOT).
 
 -spec file(string()) -> file:filename().
 file(Ext) ->
@@ -354,8 +349,7 @@ file(Ext) ->
     
     [File, _Method] = string:lexemes(Env, "."),
     
-    Res = filename:join(Env, _Name = lists:append(File, Ext)),
-    Res.
+    filename:join(Env, _Name = lists:append(File, Ext)).
 
 -spec method() -> string().
 method() ->
