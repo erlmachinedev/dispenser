@@ -5,10 +5,7 @@
 -define(LAMBDA_TASK_ROOT, "LAMBDA_TASK_ROOT").
 -define(_HANDLER, "_HANDLER").
 
--define(_X_AMZN_TRACE_ID, "_X_AMZN_TRACE_ID").
-
 -import(erlbox, [success/3, failure/1, callback/4]).
-
 -import(erlang, [error/2, garbage_collect/0]).
 
 -export([boot/1, boot/2, boot/3]).
@@ -37,7 +34,9 @@
 %%% API
 
 boot(Mod) ->
-    boot(Mod, [_Command = fun () -> garbage_collect(), ok end]).
+    Command = fun () -> garbage_collect(), ok end,
+
+    boot(Mod, [Command]).
 
 boot(Mod, Commands) ->
     boot(Mod, Commands, _Shutdown = fun init:stop/0).
@@ -106,7 +105,6 @@ callback_mode() -> [state_functions, state_enter].
 process(enter, _State, Data) ->
     Pid = connection(Data),
     
-    %% TODO Provide a function naming
     invocation(Pid, _Path = "/invocation/next"),
     
     {keep_state, Data};
@@ -139,66 +137,55 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
 
     {repeat_state, Data, []};
     
-process(info, {gun_response, _Pid, _Ref, _, _Status = 500, _Headers}, Data) ->
-   %% TODO Terminate the runtime
-
+process(info, {gun_response, _Pid, _Ref, _, 500, _Headers}, _Data) ->
     stop;
 
 process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
-    %% TODO Terminate the runtime
-
     {stop, Reason, Data}.
 
 %%% Data
 
--spec setup(module()) -> function().
-setup(Mod) ->
+-spec callback(callback(), module()) -> function().
+callback(setup, Mod) ->
     Def = fun () -> error(not_implemented) end,
     
-    fun () -> callback(Mod, setup, [], Def) end.
-
--spec decode(module()) -> function().    
-decode(Mod) ->
+    fun () -> callback(Mod, setup, [], Def) end;
+    
+callback(decode, Mod)) ->
     Def = fun (Json) -> jsx:decode(Json) end,
     
-    fun (Json) -> callback(Mod, decode, [Json], Def) end.
+    fun (Json) -> callback(Mod, decode, [Json], Def) end;
 
--spec encode(module()) -> function().    
-encode(Mod) ->
+callback(encode, Mod) ->
     Def = fun (Term) -> jsx:encode(Term) end,
     
-    fun (Term) -> callback(Mod, encode, [Term], Def) end.
+    fun (Term) -> callback(Mod, encode, [Term], Def) end;
 
--spec exec(module()) -> function().
-exec(Mod) ->
+callback(exec, Mod) ->
     Def = fun (Json, Context) -> error(not_implemented, [Json, Context]) end,
     
     Enc = encode(Mod),
     Dec = decode(Mod),
     
     fun (Json, Context) -> Event = Dec(Json),
-                                   
                            Res = callback(Mod, exec, [Event, Context], Def),
-                                  
+                           
                            Enc(Res)
-    end.
+    end;
 
-
--spec iterator(module()) -> function().
-iterator(Mod) ->
+callback(iterator, Mod) ->
     Def = fun (_) -> false end,
     
     Res = fun (Json) -> callback(Mod, iterator, [Json], Def) end,
-    Res.
+    Res;
 
--spec next(module()) -> function().
-next(Mod) ->
+callback(next, Mod) ->
     Def = fun (I) -> error(not_implemented, [I]) end,
     
     Res = fun (I) -> callback(Mod, next, [I]) end,
-    Res.
+    Res;
 
-exception() ->
+callback(exception, Mod) ->
     Def = fun (E, R, S) -> erl_error:format_exception(E, R, S) end,
     
     Res = fun (E, R, S) -> callback(Mod, exception, [E, R, S]) end,
@@ -206,12 +193,12 @@ exception() ->
 
 -spec data(module(), pid(), [command()], function()) -> data().
 data(Mod, Pid, Commands, Shutdown) ->
-    I = iterator(Mod), Next = next(Mod),
+    I = callback(iterator, Mod), Next = callback(next, Mod),
     
-    Setup = setup(Mod),
-    Exec = exec(Mod),
+    Setup = callback(setup, Mod),
+    Exec = callback(exec, Mod),
     
-    Exception = exception(Mod),
+    Exception = callback(exception, Mod),
 
     #data{ commands = Commands, shutdown = Shutdown, connection = Pid,
            
@@ -252,25 +239,15 @@ next(Data, I) ->
     
     Fun(I).
 
--spec format(data()) -> function().
-format(Data) ->
-    Data#data.format.
-
 -spec shutdown(data()) -> function().
 shutdown(Data) ->
     Data#data.shutdown.
     
--spec setup(data()) -> success().
-setup(Data) ->
-    Mod = module(Data),
+-spec exception(data(), error | exit | throw, term(), [term()]) -> [string()].
+exception(Data, E, R, Stacktrace) ->
+    Fun = exception(Data),
     
-    Mod:setup().
-
--spec stacktrace(data(), [term()]) -> [string()].
-stacktrace(Data, Term) ->
-    Fun = format(Data), true = is_function(Fun),
-    
-    Res = Fun(Term),
+    Res = Fun(E, R, Stacktrace),
     Res.
 
 %% HTTP
@@ -318,7 +295,7 @@ submit(Data, Json, Headers) ->
 report(Pid, Path, E, R, S) ->
     Headers = [{<<"content-type">>, <<"application/json">>}],
     
-    Body = #{ stackTrace => stacktrace(S), 
+    Body = #{ stackTrace => exception(Data, E, R, S), 
                   
               errorType => E, 
               errorMessage => R
