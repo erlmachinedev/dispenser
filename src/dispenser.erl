@@ -26,9 +26,28 @@
 -include_lib("erlbox/include/erlbox.hrl").
 
 -type connection() :: pid().
--type command() :: fun(() -> ok).
+-type command() :: function().
+
+-type json() :: binary().
+
+-type event() :: term().
+-type context() :: map().
 
 -type iterator() :: term().
+
+-callback setup() -> ok.
+
+-callback decode(json()) -> term().
+-callback encode(term()) -> json().
+
+-callback exec(event(), context()) -> term().
+
+-callback iterator(json()) -> iterator().
+-callback next(iterator()) -> {term(), iterator()} | none.
+
+-callback exception(error | exit | throw, term(), [term()]) -> [string()].
+
+-optional_callbacks([decode/1, encode/1, iterator/1, next/1, exception/3]).
 
 %%% API
 
@@ -144,7 +163,7 @@ process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
 
 %%% Data
 
--spec callback(callback(), module()) -> function().
+-spec callback(atom(), module()) -> function().
 callback(setup, Mod) ->
     Def = fun () -> error(not_implemented) end,
     
@@ -220,19 +239,19 @@ setup(Data) ->
     
     Fun().
 
--spec exec(data(), iodata(), map()) -> iodata().
+-spec exec(data(), json(), context()) -> json().
 exec(Data, Json, Context) ->
     Fun = Data#data.exec,
     
     Fun(Json, Context).
 
--spec iterator(data(), iodata()) -> iterator().
+-spec iterator(data(), json()) -> iterator().
 iterator(Data, Json) ->
     Fun = Data#data.iterator,
     
     Fun(Json).
 
--spec next(data(), iterator()) -> {iodata(), iterator()} | none.
+-spec next(data(), iterator()) -> {term(), iterator()} | none.
 next(Data, I) ->
     Fun = Data#data.next,
     
