@@ -106,7 +106,7 @@ init([Mod, Commands, Shutdown]) ->
         success(process, Data, [])
     
     catch E:R:S -> 
-        report(Pid, _Path = "/init/error", E, R, S),
+        report(Pid, _Path = path("/init/error"), E, R, S),
         
         failure(R)
     end.
@@ -123,7 +123,7 @@ callback_mode() -> [state_functions, state_enter].
 process(enter, _State, Data) ->
     Pid = connection(Data),
     
-    invocation(Pid, _Path = "/invocation/next"),
+    invocation(Pid, _Path = path("/invocation/next")),
     
     {keep_state, Data};
 
@@ -194,20 +194,17 @@ callback(exec, Mod) ->
 callback(iterator, Mod) ->
     Def = fun (_) -> false end,
     
-    Res = fun (Json) -> callback(Mod, iterator, [Json], Def) end,
-    Res;
+    fun (Json) -> callback(Mod, iterator, [Json], Def) end;
 
 callback(next, Mod) ->
     Def = fun (I) -> error(not_implemented, [I]) end,
     
-    Res = fun (I) -> callback(Mod, next, [I]) end,
-    Res;
+    fun (I) -> callback(Mod, next, [I]) end;
 
 callback(exception, Mod) ->
     Def = fun (E, R, S) -> erl_error:format_exception(E, R, S) end,
     
-    Res = fun (E, R, S) -> callback(Mod, exception, [E, R, S]) end,
-    Res.
+    fun (E, R, S) -> callback(Mod, exception, [E, R, S]) end.
 
 -spec data(module(), pid(), [command()], function()) -> data().
 data(Mod, Pid, Commands, Shutdown) ->
@@ -281,24 +278,25 @@ connect(URI) ->
     Res = Pid,
     Res.
 
-path(Headers) ->
-    ReqId = proplists:get_value(<<"lambda-runtime-aws-request-id">>, Headers),
+path(Info) ->
+    Path = ["/2018-06-01/runtime/", Info],
     
-    Path = ["/2018-06-01/runtime/invocation/", ReqId, "/response"],
-
     unicode:characters_to_list(Path).
-
-stream(Data, I, Headers) ->
-    Path = path(Headers),
     
+path(Headers, Info) ->
+    Key = <<"lambda-runtime-aws-request-id">>,
+    
+    path(["/invocation/", _Val = proplists:get_value(Key, Headers), Info]).
+
+stream(Data, I, Path) ->
     %% TODO Generate a runtime error (status, payload)
     
-    error(not_implemented, [I, Headers]).
+    error(not_implemented, [Data, I, Headers]).
 
-submit(Data, Json, Headers) ->
+submit(Data, Json, Path) ->
     Pid = connection(Data),
     
-    Ref = gun:post(Pid, _Path = path(Headers), [], Json),
+    Ref = gun:post(Pid, Path, [], Json),
     Res = gun:await(Pid, Ref),
  
     {response, _IsFin, Code, _} = Res,
@@ -321,18 +319,26 @@ report(Pid, Path, E, R, S) ->
     Json = jsx:encode(Body),
         
     Ref = gun:post(Pid, Path, Headers, Json),
-        
-    {response, nofin, Code, Headers} = gun:await(Pid, Ref),
-    
     Res = gun:await(Pid, Ref),
+        
+    {response, _IsFin, Code, Headers} = Res,
+    
+    Code == 202 orelse error(Code),
     
     T = "~p",
     
-    ct:print(T, [Code, Headers, Res]).
+    ct:print(T, [Code]),
+    ct:print(T, [Headers]),
+    ct:print(T, [gun:await(Pid, Ref)]),
+    
     %% TODO Print response body to console
     %% TODO Inspect the status code
     
     %% TODO Generate a runtime error (status, payload)
+
+    %% TODO Check the pressence of a message
+    
+    gun:flush(Ref).
 
 %% Event
     
