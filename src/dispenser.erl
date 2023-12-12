@@ -17,7 +17,7 @@
 
 -export([process/3]).
 
--export([file/1, method/0]).
+-export([file/0, method/0]).
 
 -behaviour(gen_statem).
 
@@ -375,13 +375,11 @@ uri() ->
 root() ->
     os:getenv(?LAMBDA_TASK_ROOT).
 
--spec file(string()) -> file:filename().
-file(Ext) ->
+-spec file() -> file:filename().
+file() ->
     [File, _Method] = string:lexemes(_Env = os:getenv(?_HANDLER), "."),
 
-    Name = lists:append(File, Ext),
-    
-    filename:join(_Root = root(), Name).
+    filename:join(_Root = root(), File).
 
 -spec method() -> string().
 method() ->
