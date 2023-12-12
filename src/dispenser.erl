@@ -7,8 +7,6 @@
 
 -import(erlbox, [success/3, failure/1, callback/3, callback/4]).
 
--import(erlang, [error/1, error/2]).
-
 -export([boot/1, boot/2, boot/3]).
 
 -export([start_link/3]).
@@ -106,7 +104,7 @@ init([Mod, Commands, Shutdown]) ->
         success(process, Data, [])
     
     catch E:R:S -> 
-        report(Pid, _Path = path("/init/error"), E, R, S),
+        report(Data, _Path = path("/init/error"), E, R, S),
         
         failure(R)
     end.
@@ -121,14 +119,12 @@ callback_mode() -> [state_functions, state_enter].
 %%  State machine
 
 process(enter, _State, Data) ->
-    Pid = connection(Data),
-    
-    invocation(Pid, _Path = path("/invocation/next")),
+    invocation(Data, _Path = path("/invocation/next")),
     
     {keep_state, Data};
 
 process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
-    try exec(Data, _Event = event(Pid, Ref), context(Headers)) of
+    try exec(Data, _Body = body(Pid, Ref), context(Headers)) of
 
         Json ->
             Path = path(Headers, "/response"),
@@ -199,12 +195,12 @@ callback(iterator, Mod) ->
 callback(next, Mod) ->
     Def = fun (I) -> error(not_implemented, [I]) end,
     
-    fun (I) -> callback(Mod, next, [I]) end;
+    fun (I) -> callback(Mod, next, [I], Def) end;
 
 callback(exception, Mod) ->
     Def = fun (E, R, S) -> erl_error:format_exception(E, R, S) end,
     
-    fun (E, R, S) -> callback(Mod, exception, [E, R, S]) end.
+    fun (E, R, S) -> callback(Mod, exception, [E, R, S], Def) end.
 
 -spec data(module(), pid(), [command()], function()) -> data().
 data(Mod, Pid, Commands, Shutdown) ->
@@ -230,6 +226,10 @@ data(Mod, Pid, Commands, Shutdown) ->
 connection(Data) ->
     Data#data.connection.
 
+-spec commands(data()) -> [command()].
+commands(Data) ->
+    Data#data.commands.
+
 -spec setup(data()) -> success().
 setup(Data) ->
     Fun = Data#data.setup,
@@ -237,10 +237,10 @@ setup(Data) ->
     Fun().
 
 -spec exec(data(), json(), context()) -> json().
-exec(Data, Json, Context) ->
+exec(Data, Body, Context) ->
     Fun = Data#data.exec,
     
-    Fun(Json, Context).
+    Fun(Body, Context).
 
 -spec iterator(data(), json()) -> iterator().
 iterator(Data, Json) ->
@@ -260,7 +260,7 @@ shutdown(Data) ->
     
 -spec exception(data(), error | exit | throw, term(), [term()]) -> [string()].
 exception(Data, E, R, Stacktrace) ->
-    Fun = exception(Data),
+    Fun = Data#data.exception,
     
     Fun(E, R, Stacktrace).
 
@@ -288,10 +288,15 @@ path(Headers, Info) ->
     
     path(["/invocation/", _Val = proplists:get_value(Key, Headers), Info]).
 
+invocation(Data, Path) ->
+    Pid = connection(Data),
+    
+    gun:get(Pid, Path).
+
 stream(Data, I, Path) ->
     %% TODO Generate a runtime error (status, payload)
     
-    error(not_implemented, [Data, I, Headers]).
+    error(not_implemented, [Data, I, Path]).
 
 submit(Data, Json, Path) ->
     Pid = connection(Data),
@@ -307,7 +312,9 @@ submit(Data, Json, Path) ->
     
     gun:flush(Ref).
 
-report(Pid, Path, E, R, S) ->
+report(Data, Path, E, R, S) ->
+    Pid = connection(Data),
+    
     Headers = [{<<"content-type">>, <<"application/json">>}],
     
     Body = #{ stackTrace => exception(Data, E, R, S), 
@@ -340,9 +347,9 @@ report(Pid, Path, E, R, S) ->
     
     gun:flush(Ref).
 
-%% Event
+body(Data, Ref) ->
+    Pid = connection(Data),
     
-event(Pid, Ref) ->
     {ok, Body} = gun:await_body(Pid, Ref),
     
     Res = Body,
@@ -370,11 +377,11 @@ root() ->
 
 -spec file(string()) -> file:filename().
 file(Ext) ->
-    Env = os:getenv(?_HANDLER),
+    [File, _Method] = string:lexemes(_Env = os:getenv(?_HANDLER), "."),
+
+    Name = lists:append(File, Ext),
     
-    [File, _Method] = string:lexemes(Env, "."),
-    
-    filename:join(Env, _Name = lists:append(File, Ext)).
+    filename:join(_Root = root(), Name).
 
 -spec method() -> string().
 method() ->
