@@ -294,6 +294,9 @@ invocation(Data, Path) ->
     gun:get(Pid, Path).
 
 stream(Data, I, Path) ->
+    %% Set the Lambda-Runtime-Function-Response-Mode HTTP header to streaming.
+    %% Set the Transfer-Encoding header to chunked.
+
     %% TODO Generate a runtime error (status, payload)
     
     error(not_implemented, [Data, I, Path]).

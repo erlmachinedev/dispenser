@@ -21,13 +21,13 @@ suite() ->
     [ {timetrap, _Time = {seconds, 10} } ].
 
 groups() ->
-    [ {execute, [test]},
-      {compile, [test]}
+    [ {submit, [test]},
+      {stream, [test]}
     ].
 
 all() ->
-    [ {group, execute, []},
-      {group, compile, []}
+    [ {group, submit, []},
+      {group, stream, []}
     ].
 
 
@@ -35,13 +35,13 @@ init_per_suite(Config) ->
     Res = Config,
     Res.
 
-init_per_group(GroupName = execute, Config) ->
+init_per_group(GroupName = submit, Config) ->
     bootstrap(GroupName),
 
     Res = Config,
     Res;
 
-init_per_group(GroupName = compile, Config) ->
+init_per_group(GroupName = stream, Config) ->
     bootstrap(GroupName),
 
     Res = Config,
