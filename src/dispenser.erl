@@ -55,7 +55,9 @@ boot(Mod) ->
     boot(Mod, [Command]).
 
 boot(Mod, Commands) ->
-    boot(Mod, Commands, _Shutdown = fun init:stop/0).
+    Shutdown = fun (_) -> init:stop() end,
+    
+    boot(Mod, Commands, Shutdown).
 
 -spec boot(module(), [command()], function()) -> success(pid()).
 boot(Mod, Commands, Shutdown) when is_atom(Mod),
@@ -124,7 +126,7 @@ process(enter, _State, Data) ->
     {keep_state, Data};
 
 process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
-    try exec(Data, _Body = body(Pid, Ref), context(Headers)) of
+    try exec(Data, _Body = body(Data, Ref), context(Headers)) of
 
         Json ->
             Path = path(Headers, "/response"),
@@ -150,7 +152,7 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
     end,
 
     {repeat_state, Data, []};
-    
+
 process(info, {gun_response, _Pid, _Ref, _, 500, _Headers}, _Data) ->
     stop;
 
@@ -161,9 +163,7 @@ process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
 
 -spec callback(atom(), module()) -> function().
 callback(setup, Mod) ->
-    Def = fun () -> error(not_implemented) end,
-    
-    fun () -> callback(Mod, setup, [], Def) end;
+    fun () -> callback(Mod, setup, []) end;
     
 callback(decode, Mod) ->
     Def = fun (Json) -> jsx:decode(Json) end,
@@ -176,13 +176,11 @@ callback(encode, Mod) ->
     fun (Term) -> callback(Mod, encode, [Term], Def) end;
 
 callback(exec, Mod) ->
-    Def = fun (Json, Context) -> error(not_implemented, [Json, Context]) end,
-    
     Enc = callback(encode, Mod),
     Dec = callback(encode, Mod),
     
     fun (Json, Context) -> Event = Dec(Json),
-                           Res = callback(Mod, exec, [Event, Context], Def),
+                           Res = callback(Mod, exec, [Event, Context]),
                            
                            Enc(Res)
     end;
@@ -279,14 +277,14 @@ connect(URI) ->
     Res.
 
 path(Info) ->
-    Path = ["/2018-06-01/runtime/", Info],
+    Path = ["/2018-06-01/runtime", Info],
     
     unicode:characters_to_list(Path).
     
 path(Headers, Info) ->
     Key = <<"lambda-runtime-aws-request-id">>,
     
-    path(["/invocation/", _Val = proplists:get_value(Key, Headers), Info]).
+    path(["/invocation", _Val = proplists:get_value(Key, Headers), Info]).
 
 invocation(Data, Path) ->
     Pid = connection(Data),
@@ -340,13 +338,6 @@ report(Data, Path, E, R, S) ->
     ct:print(T, [Code]),
     ct:print(T, [Headers]),
     ct:print(T, [gun:await(Pid, Ref)]),
-    
-    %% TODO Print response body to console
-    %% TODO Inspect the status code
-    
-    %% TODO Generate a runtime error (status, payload)
-
-    %% TODO Check the pressence of a message
     
     gun:flush(Ref).
 

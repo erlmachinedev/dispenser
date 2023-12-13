@@ -30,7 +30,6 @@ all() ->
       {group, stream, []}
     ].
 
-
 init_per_suite(Config) ->
     Res = Config,
     Res.
@@ -60,48 +59,33 @@ end_per_suite(_Config) ->
 %%--------------------------------------------------------------------
 
 test(Config) ->
-    Pid = connect(_URI = dispenser:uri()),
+    Mod = test,
 
-    ct:print("Pid: ~p", [Pid]),
+    meck:new(Mod, [passthrough, non_strict, no_link]),
     
-    %Ref = gun:post(Pid, "/2015-03-31/functions/function/invocations", [], <<"{}">>),
-    %Res = gun:await_body(Pid, Ref),
+    %% NOTE Inspect the runtime error
+    meck:expect(Mod, setup, fun () -> ok end),
     
-    %ct:print("Res: ~p", [Res]),
-    
+    %% NOTE Inspect the runtime error
+    meck:expect(Mod, exec, fun (_Event, _Context) -> #{test => ok} end),
+
     %% TODO Implement gun mock as a Fun
     
     %% TODO Consider to implement Gun emulator (recorded scenario inside process)
     
     %% TODO Lambda will not start a client until the task is ready (404 code)
+
+    dispenser:boot(Mod),
+
+    %% TODO RIE interaction to pass sync test
+    %% TODO Get the reponse from a runtime
     
-    T = "~p",
-    
-    Ref0 = gun:get(Pid, "/2018-06-01/runtime/invocation/next"),
-    
-    {response, _, 200, Headers} = gun:await(Pid, Ref0),
+    %% TODO Check that process is running
+    %% NOTE {status, Pid, _Mod, [_PDict, running, _, _Dbg, Info]} = sys:get_status(Name),
 
-    AwsRequestId = proplists:get_value(<<"lambda-runtime-aws-request-id">>, Headers),
+    meck:unload(Mod),    
 
-    ct:print(T, [AwsRequestId]),
-
-    Res0 = gun:await(Pid, Ref0),
-
-    ct:print(T, [Res0]),
-
-    Ref1 = gun:post(Pid, unicode:characters_to_list(["/2018-06-01/runtime/invocation/", AwsRequestId, "/response"]), [], <<"OK">>),
-    Res1 = gun:await(Pid, Ref1),
-    
-    ct:print(T, [Res1]),
-    
-    ct:print(T, [gun:await(Pid, Ref1)]),
-
-    Ref = gun:get(Pid, "/2018-06-01/runtime/invocation/next"),
-    Res = gun:await(Pid, Ref),
-
-    ct:print(T, [Res]),
-
-    ct:log("~n~p: ~p~n", [?FUNCTION_NAME, Config]).
+    ct:print("~n~p: ~p~n", [?FUNCTION_NAME, Config]).
 
 %%--------------------------------------------------------------------
 %% FUNCTIONS
@@ -113,20 +97,4 @@ bootstrap(_Mode) ->
 
 shutdown() ->
     Res = application:stop(dispenser),
-    Res.
-
-connect(URI) ->
-    Host = maps:get(host, URI),
-    Port = maps:get(port, URI),
-    
-    Opts =  #{ retry => 0,
-               connect_timeout => 2000,
-
-               transport => tcp
-             },
-
-    {ok, Pid} = gun:open(Host, Port, Opts),
-    {ok, _} = gun:await_up(Pid),
-
-    Res = Pid,
     Res.
