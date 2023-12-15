@@ -287,9 +287,7 @@ path(Headers, Info) ->
     path(["/invocation", _Val = proplists:get_value(Key, Headers), Info]).
 
 invocation(Data, Path) ->
-    Pid = connection(Data),
-    
-    gun:get(Pid, Path).
+    gun:get(_Pid = connection(Data), Path).
 
 stream(Data, I, Path) ->
     %% Set the Lambda-Runtime-Function-Response-Mode HTTP header to streaming.

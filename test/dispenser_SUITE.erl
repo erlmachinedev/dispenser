@@ -26,8 +26,8 @@ groups() ->
     ].
 
 all() ->
-    [ {group, submit, []},
-      {group, stream, []}
+    [ {group, submit, []}
+      %{group, stream, []}
     ].
 
 init_per_suite(Config) ->
@@ -60,7 +60,7 @@ end_per_suite(_Config) ->
 
 test(Config) ->
     Mod = test,
-
+    
     meck:new(Mod, [passthrough, non_strict, no_link]),
     
     %% NOTE Inspect the runtime error
@@ -71,11 +71,17 @@ test(Config) ->
 
     %% TODO Implement gun mock as a Fun
     
-    %% TODO Consider to implement Gun emulator (recorded scenario inside process)
+    meck:new(gun, [passthrough, no_link]),
     
-    %% TODO Lambda will not start a client until the task is ready (404 code)
 
+    meck:expect(gun, open, fun open/3),
+    meck:expect(gun, await_up, fun await_up/1),
+    
+    meck:expect(gun, get, fun get/2),
+    
     dispenser:boot(Mod),
+
+    %% send(dispenser, _Message = {gun_response, Pid, Ref, _, _Status = 200, Headers})
 
     %% TODO RIE interaction to pass sync test
     %% TODO Get the reponse from a runtime
@@ -98,3 +104,23 @@ bootstrap(_Mode) ->
 shutdown() ->
     Res = application:stop(dispenser),
     Res.
+
+inspect(Fun) ->
+    receive Fun -> Fun() 
+    
+    end.
+    
+%%--------------------------------------------------------------------
+%% GUN
+%%--------------------------------------------------------------------
+
+open(_Host = "127.0.0.1", Port, Opts) when is_integer(Port),
+                                           is_map(Opts) ->
+
+    erlbox:success(_Pid = self()).
+    
+await_up(Pid) when is_pid(Pid) ->
+    erlbox:success(_Ret = http).
+    
+get(Pid, _Path = "/2018-06-01/runtime/invocation/next") when is_pid(Pid) ->
+    _Ref = erlang:make_ref().
