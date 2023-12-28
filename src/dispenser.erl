@@ -191,9 +191,7 @@ callback(iterator, Mod) ->
     fun (Json) -> callback(Mod, iterator, [Json], Def) end;
 
 callback(next, Mod) ->
-    Def = fun (I) -> error(not_implemented, [I]) end,
-    
-    fun (I) -> callback(Mod, next, [I], Def) end;
+    fun (I) -> callback(Mod, next, [I]) end;
 
 callback(exception, Mod) ->
     Def = fun (E, R, S) -> erl_error:format_exception(E, R, S) end,
