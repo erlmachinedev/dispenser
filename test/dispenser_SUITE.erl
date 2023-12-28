@@ -81,6 +81,11 @@ test(Config) ->
     
     dispenser:boot(Mod),
 
+    %% TODO Send the message (Code 200) from Gun
+
+    %% TODO Repeat the test (Code 500) 
+
+
     %% send(dispenser, _Message = {gun_response, Pid, Ref, _, _Status = 200, Headers})
 
     %% TODO RIE interaction to pass sync test
