@@ -71,20 +71,19 @@ test(Config) ->
 
     %% TODO Implement gun mock as a Fun
     
-    meck:new(gun, [passthrough, no_link]),
+    %meck:new(gun, [passthrough, no_link]),
     
 
-    meck:expect(gun, open, fun open/3),
-    meck:expect(gun, await_up, fun await_up/1),
+    %meck:expect(gun, open, fun open/3),
+    %meck:expect(gun, await_up, fun await_up/1),
     
-    meck:expect(gun, get, fun get/2),
+    %meck:expect(gun, get, fun get/2),
     
     dispenser:boot(Mod),
 
     %% TODO Send the message (Code 200) from Gun
 
     %% TODO Repeat the test (Code 500) 
-
 
     %% send(dispenser, _Message = {gun_response, Pid, Ref, _, _Status = 200, Headers})
 
@@ -94,8 +93,8 @@ test(Config) ->
     %% TODO Check that process is running
     %% NOTE {status, Pid, _Mod, [_PDict, running, _, _Dbg, Info]} = sys:get_status(Name),
 
-    meck:unload(Mod),    
-
+    %meck:unload(Mod),    
+    
     ct:print("~n~p: ~p~n", [?FUNCTION_NAME, Config]).
 
 %%--------------------------------------------------------------------
@@ -119,13 +118,13 @@ inspect(Fun) ->
 %% GUN
 %%--------------------------------------------------------------------
 
-open(_Host = "127.0.0.1", Port, Opts) when is_integer(Port),
-                                           is_map(Opts) ->
+%open(_Host = "127.0.0.1", Port, Opts) when is_integer(Port),
+%                                           is_map(Opts) ->
 
-    erlbox:success(_Pid = self()).
+%    erlbox:success(_Pid = self()).
     
-await_up(Pid) when is_pid(Pid) ->
-    erlbox:success(_Ret = http).
+%await_up(Pid) when is_pid(Pid) ->
+%    erlbox:success(_Ret = http).
     
-get(Pid, _Path = "/2018-06-01/runtime/invocation/next") when is_pid(Pid) ->
-    _Ref = erlang:make_ref().
+%get(Pid, _Path = "/2018-06-01/runtime/invocation/next") when is_pid(Pid) ->
+%    _Ref = erlang:make_ref().

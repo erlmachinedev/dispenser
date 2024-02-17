@@ -136,7 +136,7 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
             if I -> 
                 stream(Data, _I = next(Data, I), Path);
             true ->
-                submit(Data, Json, Path) 
+                submit(Data, Json, Path)
             end
 
     catch E:R:S ->
@@ -282,7 +282,7 @@ path(Info) ->
 path(Headers, Info) ->
     Key = <<"lambda-runtime-aws-request-id">>,
     
-    path(["/invocation", _Val = proplists:get_value(Key, Headers), Info]).
+    path(["/invocation/", _Val = proplists:get_value(Key, Headers), Info]).
 
 invocation(Data, Path) ->
     gun:get(_Pid = connection(Data), Path).
@@ -305,9 +305,7 @@ submit(Data, Json, Path) ->
     
     Code == 202 orelse error(Code),
     
-    %% TODO Check the pressence of a message
-    
-    gun:flush(Ref).
+    gun:await(Pid, Ref).
 
 report(Data, Path, E, R, S) ->
     Pid = connection(Data),
