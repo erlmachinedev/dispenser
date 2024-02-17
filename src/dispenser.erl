@@ -121,14 +121,22 @@ callback_mode() -> [state_functions, state_enter].
 %%  State machine
 
 process(enter, _State, Data) ->
-    invocation(Data, _Path = path("/invocation/next")),
+    _Ref = invoke(Data, _Path = path("/invocation/next")),
+    
+    ct:print("Ref ~p", [_Ref]),
     
     {keep_state, Data};
 
 process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
+
+    ct:print("Headers ~p", [Headers]),
+    
     try exec(Data, _Body = body(Data, Ref), context(Headers)) of
 
         Json ->
+        
+            ct:print("Json ~p", [Json]),
+            
             Path = path(Headers, "/response"),
             
             I = iterator(Data, Json),
@@ -140,6 +148,9 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
             end
 
     catch E:R:S ->
+    
+        ct:print("Catch ~p", [[E, R, S]]),
+        
         report(Pid, _Path = path(Headers, "/error"), E, R, S)
         
     after
@@ -236,7 +247,8 @@ setup(Data) ->
 exec(Data, Body, Context) ->
     Fun = Data#data.exec,
     
-    Fun(Body, Context).
+    Res = Fun(Body, Context), ct:print("Exec ~p", [Res]),
+    Res.
 
 -spec iterator(data(), json()) -> iterator().
 iterator(Data, Json) ->
@@ -284,7 +296,7 @@ path(Headers, Info) ->
     
     path(["/invocation/", _Val = proplists:get_value(Key, Headers), Info]).
 
-invocation(Data, Path) ->
+invoke(Data, Path) ->
     gun:get(_Pid = connection(Data), Path).
 
 stream(Data, I, Path) ->
@@ -303,9 +315,11 @@ submit(Data, Json, Path) ->
  
     {response, _IsFin, Code, _} = Res,
     
+    ct:print("Res ~p", [Res]),
+    
     Code == 202 orelse error(Code),
     
-    gun:await(Pid, Ref).
+    ct:print("submit ~p", [gun:await(Pid, Ref)]).
 
 report(Data, Path, E, R, S) ->
     Pid = connection(Data),
@@ -338,7 +352,9 @@ report(Data, Path, E, R, S) ->
 body(Data, Ref) ->
     Pid = connection(Data),
     
-    {ok, Body} = gun:await_body(Pid, Ref),
+    T = gun:await_body(Pid, Ref), ct:print("Body ~p", [T]),
+    
+    {ok, Body} = T,
     
     Res = Body,
     Res.

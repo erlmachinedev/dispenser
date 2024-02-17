@@ -31,6 +31,12 @@ all() ->
     ].
 
 init_per_suite(Config) ->
+    Var = "AWS_LAMBDA_RUNTIME_API",
+    
+    ct:print("ENV ~p", [os:getenv("AWS_LAMBDA_RUNTIME_API")]),
+    
+    %os:putenv(Var, "127.0.0.1:8080"),
+
     Res = Config,
     Res.
 
@@ -73,23 +79,34 @@ test(Config) ->
     
     %meck:new(gun, [passthrough, no_link]),
     
-
     %meck:expect(gun, open, fun open/3),
     %meck:expect(gun, await_up, fun await_up/1),
     
     %meck:expect(gun, get, fun get/2),
-    
+
+    %% TODO AWS_LAMBDA_RUNTIME_API ENV
+
     dispenser:boot(Mod),
 
-    %% TODO Send the message (Code 200) from Gun
+    %meck:expect(gun, await, fun (_Pid, _Ref) -> {response, nofin, 202, []} end),
 
-    %% TODO Repeat the test (Code 500) 
+    %Body = <<"{}">>,
+ 
+    %meck:expect(gun, await_body, fun (_Pid, _Ref) -> {ok, Body} end),
+ 
+    %Pid = self(),
+    %Ref = erlang:make_ref(),
 
-    %% send(dispenser, _Message = {gun_response, Pid, Ref, _, _Status = 200, Headers})
+    %Headers = [{<<"lambda-runtime-aws-request-id">>, <<"e6183403-a036-4179-8267-adfc503af4c2">>}],
 
-    %% TODO RIE interaction to pass sync test
-    %% TODO Get the reponse from a runtime
-    
+    %erlang:send(dispenser, _Message = {gun_response, Pid, Ref, nofin, _Code = 200, Headers}),
+
+    %meck:expect(gun, await, fun (_Pid, _Ref) -> {data, fin, <<"{\"status\":\"OK\"}\n">>} end),
+
+    %sys:get_status(dispenser),
+
+    %% TODO Terminare the state machine (Code 500) 
+
     %% TODO Check that process is running
     %% NOTE {status, Pid, _Mod, [_PDict, running, _, _Dbg, Info]} = sys:get_status(Name),
 
@@ -119,12 +136,11 @@ inspect(Fun) ->
 %%--------------------------------------------------------------------
 
 %open(_Host = "127.0.0.1", Port, Opts) when is_integer(Port),
-%                                           is_map(Opts) ->
-
+                                          % is_map(Opts) ->
 %    erlbox:success(_Pid = self()).
     
 %await_up(Pid) when is_pid(Pid) ->
 %    erlbox:success(_Ret = http).
     
 %get(Pid, _Path = "/2018-06-01/runtime/invocation/next") when is_pid(Pid) ->
-%    _Ref = erlang:make_ref().
+%    erlang:make_ref().
