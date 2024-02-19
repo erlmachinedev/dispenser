@@ -151,7 +151,7 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
     
         ct:print("Catch ~p", [[E, R, S]]),
         
-        report(Pid, _Path = path(Headers, "/error"), E, R, S)
+        report(Data, _Path = path(Headers, "/error"), E, R, S)
         
     after
         [ begin ok = Command(),
@@ -319,7 +319,7 @@ submit(Data, Json, Path) ->
     
     Code == 202 orelse error(Code),
     
-    ct:print("submit ~p", [gun:await(Pid, Ref)]).
+    ct:print("submit ~tp", [gun:await(Pid, Ref)]).
 
 report(Data, Path, E, R, S) ->
     Pid = connection(Data),
@@ -333,26 +333,22 @@ report(Data, Path, E, R, S) ->
             },
         
     Json = jsx:encode(Body),
-        
+    
     Ref = gun:post(Pid, Path, Headers, Json),
     Res = gun:await(Pid, Ref),
         
-    {response, _IsFin, Code, Headers} = Res,
+    ct:print("Res ~tp", [Res]),
+    
+    {response, _IsFin, Code, _} = Res,
     
     Code == 202 orelse error(Code),
-    
-    T = "~p",
-    
-    ct:print(T, [Code]),
-    ct:print(T, [Headers]),
-    ct:print(T, [gun:await(Pid, Ref)]),
-    
-    gun:flush(Ref).
+
+    ct:print("report ~tp", [gun:await(Pid, Ref)]).
 
 body(Data, Ref) ->
     Pid = connection(Data),
     
-    T = gun:await_body(Pid, Ref), ct:print("Body ~p", [T]),
+    T = gun:await_body(Pid, Ref), ct:print("Body ~tp", [T]),
     
     {ok, Body} = T,
     

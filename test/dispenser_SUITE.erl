@@ -73,7 +73,10 @@ test(Config) ->
     meck:expect(Mod, setup, fun () -> ok end),
     
     %% NOTE Inspect the runtime error
-    meck:expect(Mod, exec, fun (_Event, _Context) -> #{test => ok} end),
+    %meck:expect(Mod, exec, fun (_Event, _Context) -> #{test => ok} end),
+
+    meck:expect(Mod, exec, fun (_Event, _Context) -> error(test) end),
+
 
     %% TODO Implement gun mock as a Fun
     
