@@ -22,7 +22,8 @@ suite() ->
 
 groups() ->
     [ {submit, [test]},
-      {stream, [test]}
+      {stream, [test]},
+      {report, [test]}
     ].
 
 all() ->
@@ -73,39 +74,50 @@ test(Config) ->
     meck:expect(Mod, setup, fun () -> ok end),
     
     %% NOTE Inspect the runtime error
-    %meck:expect(Mod, exec, fun (_Event, _Context) -> #{test => ok} end),
+    meck:expect(Mod, exec, fun (_Event, _Context) -> #{test => ok} end),
 
-    meck:expect(Mod, exec, fun (_Event, _Context) -> error(test) end),
+    %meck:expect(Mod, exec, fun (_Event, _Context) -> error(test) end),
 
-
-    %% TODO Implement gun mock as a Fun
+    meck:new(gun, [passthrough, no_link]),
     
-    %meck:new(gun, [passthrough, no_link]),
+    meck:expect(gun, open, fun open/3),
+    meck:expect(gun, await_up, fun await_up/1),
     
-    %meck:expect(gun, open, fun open/3),
-    %meck:expect(gun, await_up, fun await_up/1),
-    
-    %meck:expect(gun, get, fun get/2),
-
-    %% TODO AWS_LAMBDA_RUNTIME_API ENV
+    meck:expect(gun, get, fun get/2),
+    meck:expect(gun, post, fun post/4),
 
     dispenser:boot(Mod),
 
-    %meck:expect(gun, await, fun (_Pid, _Ref) -> {response, nofin, 202, []} end),
+    Loop = [{response, nofin, 202, []}, {data, fin, <<"{\"status\":\"OK\"}\n">>}],
 
-    %Body = <<"{}">>,
+    meck:expect(gun, await, ['_', '_'], meck:loop(Loop)),
+
+    meck:expect(gun, await, fun (_Pid, _Ref) -> {response, nofin, 202, []} end),
+
+    Body = <<"{}">>,
  
-    %meck:expect(gun, await_body, fun (_Pid, _Ref) -> {ok, Body} end),
+    meck:expect(gun, await_body, fun (_Pid, _Ref) -> {ok, Body} end),
  
-    %Pid = self(),
-    %Ref = erlang:make_ref(),
+    Pid = self(),
+    Ref = erlang:make_ref(),
 
-    %Headers = [{<<"lambda-runtime-aws-request-id">>, <<"e6183403-a036-4179-8267-adfc503af4c2">>}],
+    Headers = [{<<"lambda-runtime-aws-request-id">>, <<"e6183403-a036-4179-8267-adfc503af4c2">>}],
 
-    %erlang:send(dispenser, _Message = {gun_response, Pid, Ref, nofin, _Code = 200, Headers}),
+    erlang:send(dispenser, {gun_response, Pid, Ref, nofin, 200, Headers}),
+    
+    %% TODO Terminate the process and start the next testcase
+    
+    erlang:send(dispenser, {gun_response, Pid, Ref, nofin, 500, Headers}),
 
-    %meck:expect(gun, await, fun (_Pid, _Ref) -> {data, fin, <<"{\"status\":\"OK\"}\n">>} end),
+    meck:expect(Mod, exec, fun (_Event, _Context) -> error(test) end),
 
+    shutdown(),
+
+    ct:print("bootstrap ~tp", [bootstrap(_Mode = submit)]),
+
+    dispenser:boot(Mod),
+    
+    erlang:send(dispenser, {gun_response, Pid, Ref, nofin, 200, Headers}),
     %sys:get_status(dispenser),
 
     %% TODO Terminare the state machine (Code 500) 
@@ -129,21 +141,21 @@ shutdown() ->
     Res = application:stop(dispenser),
     Res.
 
-inspect(Fun) ->
-    receive Fun -> Fun() 
-    
-    end.
-    
+
 %%--------------------------------------------------------------------
 %% GUN
 %%--------------------------------------------------------------------
 
-%open(_Host = "127.0.0.1", Port, Opts) when is_integer(Port),
-                                          % is_map(Opts) ->
-%    erlbox:success(_Pid = self()).
+open(_Host, Port, Opts) when is_integer(Port),
+                             is_map(Opts) ->
+    erlbox:success(_Pid = self()).
     
-%await_up(Pid) when is_pid(Pid) ->
-%    erlbox:success(_Ret = http).
+await_up(Pid) when is_pid(Pid) ->
+    erlbox:success(_Ret = http).
     
-%get(Pid, _Path = "/2018-06-01/runtime/invocation/next") when is_pid(Pid) ->
-%    erlang:make_ref().
+get(Pid, _Path) when is_pid(Pid) ->
+    erlang:make_ref().
+
+post(Pid, _Path, _Headers, Json) when is_pid(Pid),
+                                      is_binary(Json) ->
+    erlang:make_ref().

@@ -114,6 +114,7 @@ init([Mod, Commands, Shutdown]) ->
 terminate(Reason, _State, Data) ->
     Fun = shutdown(Data),
     
+    ct:print("Terminated ~tp", [Data]),
     Fun(Reason).
 
 callback_mode() -> [state_functions, state_enter].
@@ -127,7 +128,7 @@ process(enter, _State, Data) ->
     
     {keep_state, Data};
 
-process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
+process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
 
     ct:print("Headers ~p", [Headers]),
     
@@ -165,6 +166,8 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
     {repeat_state, Data, []};
 
 process(info, {gun_response, _Pid, _Ref, _, 500, _Headers}, _Data) ->
+    ct:print("Stop message ~tp", [test]),
+
     stop;
 
 process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
