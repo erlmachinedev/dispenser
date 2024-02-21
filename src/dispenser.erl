@@ -191,7 +191,7 @@ callback(encode, Mod) ->
 
 callback(exec, Mod) ->
     Enc = callback(encode, Mod),
-    Dec = callback(encode, Mod),
+    Dec = callback(decode, Mod),
     
     fun (Json, Context) -> Event = Dec(Json),
                            Res = callback(Mod, exec, [Event, Context]),
@@ -336,6 +336,8 @@ report(Data, Path, E, R, S) ->
             },
         
     Json = jsx:encode(Body),
+    
+    ct:print("Json ~tp", [Json]),
     
     Ref = gun:post(Pid, Path, Headers, Json),
     Res = gun:await(Pid, Ref),
