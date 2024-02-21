@@ -340,7 +340,7 @@ report(Data, Path, E, R, S) ->
     Ref = gun:post(Pid, Path, Headers, Json),
     Res = gun:await(Pid, Ref),
         
-    ct:print("Res ~tp", [Res]),
+    ct:print("Report ~tp", [Res]),
     
     {response, _IsFin, Code, _} = Res,
     
