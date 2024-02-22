@@ -43,6 +43,8 @@ test(Config) ->
     
     meck:expect(gun, open, fun open/3),
     meck:expect(gun, await_up, fun await_up/1),
+
+    meck:expect(gun, await, ['_', '_'], _Response = await()),
     
     meck:expect(gun, post, fun post/4),
 
@@ -52,11 +54,11 @@ test(Config) ->
 
     meck:expect(test, setup, fun () -> error(test) end),
 
-    meck:expect(gun, await, ['_', '_'], _Response = await()),
-
     dispenser:boot(test),
+    
+    {'EXIT', _} = catch(sys:get_state(dispenser)),
 
-    %% Next invocation
+    %% Next Invocation (invocation response)
 
     bootstrap(),
 
@@ -76,9 +78,22 @@ test(Config) ->
     Headers = [{Key, _Val = <<"e6183403-a036-4179-8267-adfc503af4c2">>}],
     
     erlang:send(dispenser, message(Pid, Ref, 200, Headers)),
+
+    {process, _} = sys:get_state(dispenser),
+
+    %% Invocation error
+
+    meck:expect(test, exec, fun (_Event, _Context) -> error(test) end),
+
     erlang:send(dispenser, message(Pid, Ref, 200, Headers)),
 
-    %meck:expect(Mod, exec, fun (_Event, _Context) -> error(test) end),
+    {process, _} = sys:get_state(dispenser),
+
+    %% Response streaming
+    
+    erlang:send(dispenser, message(Pid, Ref, 200, Headers)),
+
+    %% TODO
 
     %meck:expect(_Mod = test, iterator, fun (Json) -> error(not_implemeted) end),
     %meck:expect(_Mod = test, next, fun (I) -> none end),
@@ -87,19 +102,14 @@ test(Config) ->
 
     %% TODO Terminare the state machine (Code 500) 
 
-    %% TODO Check that process is running
-    %% NOTE {status, Pid, _Mod, [_PDict, running, _, _Dbg, Info]} = sys:get_status(Name),
-
-    ct:print("Status ~tp", [sys:get_status(dispenser)]),
-
     erlang:send(dispenser, message(Pid, Ref, 500, [])),
-
-    ct:print("Status ~tp", [catch(sys:get_status(dispenser))]),
+    
+    {'EXIT', _} = catch(sys:get_state(dispenser)),
 
     meck:unload(test),
-    meck:unload(gun),   
+    meck:unload(gun),
     
-    ct:print("Config ~tp", [Config]).
+    ok.
 
 %%--------------------------------------------------------------------
 %% FUNCTIONS
@@ -108,8 +118,6 @@ test(Config) ->
 bootstrap() ->
     application:ensure_all_started(dispenser).
 
-shutdown() ->
-    application:stop(dispenser).
 
 %%--------------------------------------------------------------------
 %% GUN
