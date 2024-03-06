@@ -37,7 +37,7 @@ end_per_suite(_Config) ->
 %% TEST CASES
 %%--------------------------------------------------------------------
 
-test(Config) ->
+test(_Config) ->
     meck:new(test, [passthrough, non_strict, no_link]),
     meck:new(gun, [passthrough, no_link]),
     
@@ -59,8 +59,8 @@ test(Config) ->
     {'EXIT', _} = catch(sys:get_state(dispenser)),
 
     %% Next Invocation (invocation response)
-
-    bootstrap(),
+    
+    ct:print("Bootstrap ~tp",[bootstrap()]),
 
     meck:expect(test, setup, fun () -> ok end),
     meck:expect(test, exec, fun (_Event, _Context) -> maps:new() end),
@@ -89,22 +89,26 @@ test(Config) ->
 
     {process, _} = sys:get_state(dispenser),
 
-    %% Response streaming
-    
-    erlang:send(dispenser, message(Pid, Ref, 200, Headers)),
-
-    %% TODO
-
-    %meck:expect(_Mod = test, iterator, fun (Json) -> error(not_implemeted) end),
-    %meck:expect(_Mod = test, next, fun (I) -> none end),
-    
-    %sys:get_status(dispenser),
-
-    %% TODO Terminare the state machine (Code 500) 
-
     erlang:send(dispenser, message(Pid, Ref, 500, [])),
+
+    %% Response streaming
+
+    ct:print("Bootstrap ~tp",[bootstrap()]),
+
+    meck:expect(test, iterator, fun (Json) -> Json end),
+    meck:expect(test, next, fun (I) -> I end),
+
+    dispenser:boot(test, [], fun (_) -> application:stop(_App = dispenser) end),
+
+    %erlang:send(dispenser, message(Pid, Ref, 200, Headers)),
     
-    {'EXIT', _} = catch(sys:get_state(dispenser)),
+    %{process, _} = sys:get_state(dispenser),
+
+    %% TODO Terminate the state machine (Code 500) 
+
+    %erlang:send(dispenser, message(Pid, Ref, 500, [])),
+    
+    %{'EXIT', _} = catch(sys:get_state(dispenser)),
 
     meck:unload(test),
     meck:unload(gun),

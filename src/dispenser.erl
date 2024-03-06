@@ -142,7 +142,11 @@ process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
             
             I = iterator(Data, Json),
 
+             ct:print("I ~tp", [I]),
+
             if I -> 
+                ct:print("I ~tp", [I]),
+            
                 stream(Data, _I = next(Data, I), Path);
             true ->
                 submit(Data, Json, Path)
@@ -303,12 +307,19 @@ invoke(Data, Path) ->
     gun:get(_Pid = connection(Data), Path).
 
 stream(Data, I, Path) ->
-    %% Set the Lambda-Runtime-Function-Response-Mode HTTP header to streaming.
-    %% Set the Transfer-Encoding header to chunked.
-
-    %% TODO Generate a runtime error (status, payload)
+    Pid = connection(Data),
     
-    error(not_implemented, [Data, I, Path]).
+    Name0 = <<"Lambda-Runtime-Function-Response-Mode">>,
+    Name1 = <<"Transfer-Encoding">>,
+    
+    Headers = [{Name0, <<"streaming">>}, {Name1, <<"chunked">>}],
+    
+    Ref = gun:post(Pid, Path, Headers),
+    
+    ct:print("Stream ~tp", [gun:data(Pid, Ref, nofin, <<"Bonjour !\n">>)]),
+    ct:print("Stream ~tp", [gun:data(Pid, Ref, fin, <<"Bonsoir !\n">>)]),
+    
+    ct:print("submit ~tp", [gun:await(Pid, Ref)]).
 
 submit(Data, Json, Path) ->
     Pid = connection(Data),
@@ -327,7 +338,7 @@ submit(Data, Json, Path) ->
 report(Data, Path, E, R, S) ->
     Pid = connection(Data),
     
-    Headers = [{<<"content-type">>, <<"application/json">>}],
+    Headers = [{_Name = <<"content-type">>, <<"application/json">>}],
     
     Body = #{ stackTrace => exception(Data, E, R, S), 
                   
