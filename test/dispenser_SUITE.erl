@@ -41,6 +41,8 @@ test(_Config) ->
     meck:new(test, [passthrough, non_strict, no_link]),
     meck:new(gun, [passthrough, no_link]),
     
+    meck:new(init, [passthrough, unstick, no_link]),
+    
     meck:expect(gun, open, fun open/3),
     meck:expect(gun, await_up, fun await_up/1),
 
@@ -48,9 +50,9 @@ test(_Config) ->
     
     meck:expect(gun, post, fun post/4),
 
-    %% Initialization error
-
     bootstrap(),
+    
+    %% Initialization error
 
     meck:expect(test, setup, fun () -> error(test) end),
 
@@ -59,8 +61,8 @@ test(_Config) ->
     {'EXIT', _} = catch(sys:get_state(dispenser)),
 
     %% Next Invocation (invocation response)
-    
-    ct:print("Bootstrap ~tp",[bootstrap()]),
+
+    meck:expect(init, stop, fun () -> ok end),
 
     meck:expect(test, setup, fun () -> ok end),
     meck:expect(test, exec, fun (_Event, _Context) -> maps:new() end),
@@ -68,7 +70,7 @@ test(_Config) ->
     meck:expect(gun, get, fun get/2),
     meck:expect(gun, await_body, fun await_body/2),
 
-    dispenser:boot(test, [], fun (_) -> application:stop(_App = dispenser) end),
+    dispenser:boot(test),
 
     Ref = erlang:make_ref(),
     Pid = self(),
@@ -81,39 +83,35 @@ test(_Config) ->
 
     {process, _} = sys:get_state(dispenser),
 
-    %% Invocation error
+    %% Response streaming
+    
+    meck:expect(test, iterator, fun (Json) -> Json end),
+    meck:expect(test, next, fun (I) -> I end),
 
+    dispenser:boot(test),
+
+    erlang:send(dispenser, message(Pid, Ref, 200, Headers)),
+    
+    {process, _} = sys:get_state(dispenser),
+        
+    %% Invocation error
+    
     meck:expect(test, exec, fun (_Event, _Context) -> error(test) end),
 
     erlang:send(dispenser, message(Pid, Ref, 200, Headers)),
 
     {process, _} = sys:get_state(dispenser),
 
+    %% Runtime shutdown
+
     erlang:send(dispenser, message(Pid, Ref, 500, [])),
-
-    %% Response streaming
-
-    ct:print("Bootstrap ~tp",[bootstrap()]),
-
-    meck:expect(test, iterator, fun (Json) -> Json end),
-    meck:expect(test, next, fun (I) -> I end),
-
-    dispenser:boot(test, [], fun (_) -> application:stop(_App = dispenser) end),
-
-    %erlang:send(dispenser, message(Pid, Ref, 200, Headers)),
     
-    %{process, _} = sys:get_state(dispenser),
-
-    %% TODO Terminate the state machine (Code 500) 
-
-    %erlang:send(dispenser, message(Pid, Ref, 500, [])),
+    {'EXIT', _} = catch(sys:get_state(dispenser)),
     
-    %{'EXIT', _} = catch(sys:get_state(dispenser)),
+    shutdown(),
 
     meck:unload(test),
-    meck:unload(gun),
-    
-    ok.
+    meck:unload(gun).
 
 %%--------------------------------------------------------------------
 %% FUNCTIONS
@@ -122,6 +120,8 @@ test(_Config) ->
 bootstrap() ->
     application:ensure_all_started(dispenser).
 
+shutdown() ->
+    application:stop(dispenser).
 
 %%--------------------------------------------------------------------
 %% GUN
