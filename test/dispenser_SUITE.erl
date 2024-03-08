@@ -88,8 +88,6 @@ test(_Config) ->
     meck:expect(test, iterator, fun (Json) -> Json end),
     meck:expect(test, next, fun (I) -> I end),
 
-    dispenser:boot(test),
-
     erlang:send(dispenser, message(Pid, Ref, 200, Headers)),
     
     {process, _} = sys:get_state(dispenser),
