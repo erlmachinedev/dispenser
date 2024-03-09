@@ -85,8 +85,14 @@ test(_Config) ->
 
     %% Response streaming
     
-    meck:expect(test, iterator, fun (Json) -> Json end),
-    meck:expect(test, next, fun (I) -> I end),
+    Iterator = fun (_) -> [<<"{">>, <<"}">>] end,
+    
+    Next = fun ([]) -> none; 
+               ([Term|I]) -> {Term, I} 
+           end,
+    
+    meck:expect(test, iterator, Iterator),
+    meck:expect(test, next, Next),
 
     erlang:send(dispenser, message(Pid, Ref, 200, Headers)),
     

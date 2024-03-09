@@ -128,26 +128,18 @@ process(enter, _State, Data) ->
     
     {keep_state, Data};
 
-process(info, {gun_response, _Pid, Ref, _, _Status = 200, Headers}, Data) ->
+process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
 
-    ct:print("Headers ~p", [Headers]),
-    
-    try exec(Data, _Body = body(Data, Ref), context(Headers)) of
+    try exec(Data, _Body = body(Pid, Ref), context(Headers)) of
 
         Json ->
         
-            ct:print("Json ~p", [Json]),
-            
             Path = path(Headers, "/response"),
             
             I = iterator(Data, Json),
 
-             ct:print("I ~tp", [I]),
-
             if I -> 
-                ct:print("I ~tp", [I]),
-            
-                stream(Data, _I = next(Data, I), Path);
+                stream(Data, I, Path);
             true ->
                 submit(Data, Json, Path)
             end
@@ -316,10 +308,22 @@ stream(Data, I, Path) ->
     
     Ref = gun:post(Pid, Path, Headers),
     
+    {Body, I} = next(Data, I),
+    
     ct:print("Stream ~tp", [gun:data(Pid, Ref, nofin, <<"Bonjour !\n">>)]),
     ct:print("Stream ~tp", [gun:data(Pid, Ref, fin, <<"Bonsoir !\n">>)]),
     
     ct:print("submit ~tp", [gun:await(Pid, Ref)]).
+
+%%stream(Pid, Ref, Body, none) ->
+%%    gun:data(Pid, Ref, fin, Body);
+    
+%%stream(Pid, Ref, Body, I) ->
+%%    case next(Data, I) of 
+%%        none ->
+%%            gun:data(Pid, Ref, nofin, Body);
+%%        {Body, }
+%%    stream(Pid, Ref, )
 
 submit(Data, Json, Path) ->
     Pid = connection(Data),
@@ -361,9 +365,7 @@ report(Data, Path, E, R, S) ->
 
     ct:print("report ~tp", [gun:await(Pid, Ref)]).
 
-body(Data, Ref) ->
-    Pid = connection(Data),
-    
+body(Pid, Ref) ->
     T = gun:await_body(Pid, Ref), ct:print("Body ~tp", [T]),
     
     {ok, Body} = T,
