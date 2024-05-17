@@ -71,9 +71,9 @@ boot(Mod, Commands, Shutdown) when is_atom(Mod),
 start_link(Mod, Commands, Shutdown) ->
     Name = ?MODULE,
     
-    Args = [Mod, Commands, Shutdown],
+    Init = fun () -> data(Mod, Commands, Shutdown) end,
     
-    gen_statem:start_link({local, Name}, ?MODULE, Args, []).
+    gen_statem:start_link({local, Name}, ?MODULE, Init, []).
 
 %% gen_statem
 
@@ -92,14 +92,12 @@ start_link(Mod, Commands, Shutdown) ->
 
 -type data() :: #data{}.
 
-init([Mod, Commands, Shutdown]) ->
+init(Init) when is_function(Init) ->
     process_flag(sensitive, true),
     
-    Pid = connect(_URI = uri()),
+    Data = connect(Init(), _URI = uri()),
     
-    monitor(process, Pid),
-
-    Data = data(Mod, Pid, Commands, Shutdown),
+    monitor(process, _Pid = connection(Data)),
 
     try setup(Data),
     
@@ -208,8 +206,8 @@ callback(exception, Mod) ->
     
     fun (E, R, S) -> callback(Mod, exception, [E, R, S], Def) end.
 
--spec data(module(), pid(), [command()], function()) -> data().
-data(Mod, Pid, Commands, Shutdown) ->
+-spec data(module(), [command()], function()) -> data().
+data(Mod, Commands, Shutdown) ->
     I = callback(iterator, Mod), Next = callback(next, Mod),
     
     Setup = callback(setup, Mod),
@@ -217,7 +215,7 @@ data(Mod, Pid, Commands, Shutdown) ->
     
     Exception = callback(exception, Mod),
 
-    #data{ commands = Commands, shutdown = Shutdown, connection = Pid,
+    #data{ commands = Commands, shutdown = Shutdown,
            
            iterator = I,
            next = Next,
@@ -227,6 +225,10 @@ data(Mod, Pid, Commands, Shutdown) ->
            
            exception = Exception
          }.
+
+-spec connection(data(), connection()) -> data().
+connection(Data, Pid) ->
+    Data#data{ connection = Pid }.
 
 -spec connection(data()) -> pid().
 connection(Data) ->
@@ -273,7 +275,7 @@ exception(Data, E, R, Stacktrace) ->
 
 %% HTTP
 
-connect(URI) ->
+connect(Data, URI) ->
     Host = maps:get(host, URI),
     Port = maps:get(port, URI),
     
@@ -282,8 +284,7 @@ connect(URI) ->
 
     Ret = http,
 
-    Res = Pid,
-    Res.
+    connection(Data, Pid).
 
 path(Info) ->
     Path = ["/2018-06-01/runtime", Info],
