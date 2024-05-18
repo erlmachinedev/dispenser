@@ -265,10 +265,10 @@ shutdown(Data) ->
     Data#data.shutdown.
     
 -spec exception(data(), error | exit | throw, term(), [term()]) -> [string()].
-exception(Data, E, R, Stacktrace) ->
+exception(Data, E, R, StackTrace) ->
     Fun = Data#data.exception,
     
-    Fun(E, R, Stacktrace).
+    Fun(E, R, StackTrace).
 
 %% HTTP
 

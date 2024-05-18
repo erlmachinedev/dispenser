@@ -17,10 +17,10 @@
 %%--------------------------------------------------------------------
 
 suite() ->
-    [ {timetrap, _Time = {seconds, 10} } ].
+    [{timetrap, _Time = {seconds, 10} }].
 
 
-all() -> [ test ].
+all() -> [test].
 
 init_per_suite(Config) ->
     ct:print("ENV ~tp", [os:getenv(_Var = "AWS_LAMBDA_RUNTIME_API")]),
