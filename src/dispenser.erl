@@ -127,11 +127,9 @@ process(enter, _State, Data) ->
     {keep_state, Data};
 
 process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
-
     try exec(Data, _Body = body(Pid, Ref), context(Headers)) of
 
         Json ->
-        
             Path = path(Headers, "/response"),
             
             I = iterator(Data, Json),
@@ -143,7 +141,6 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
             end
 
     catch E:R:S ->
-    
         ct:print("Catch ~p", [[E, R, S]]),
         
         report(Data, _Path = path(Headers, "/error"), E, R, S)
@@ -297,15 +294,16 @@ path(Headers, Info) ->
     path(["/invocation/", _Val = proplists:get_value(Key, Headers), Info]).
 
 invoke(Data, Path) ->
-    gun:get(_Pid = connection(Data), Path).
+    Pid = connection(Data),
+
+    gun:get(Pid, Path).
 
 stream(Data, I, Path) ->
     Pid = connection(Data),
     
-    Name0 = <<"Lambda-Runtime-Function-Response-Mode">>,
-    Name1 = <<"Transfer-Encoding">>,
-    
-    Headers = [{Name0, <<"streaming">>}, {Name1, <<"chunked">>}],
+    Headers = [ {<<"Lambda-Runtime-Function-Response-Mode">>, <<"streaming">>}, 
+                {<<"Transfer-Encoding">>, <<"chunked">>}
+              ],
     
     Ref = gun:post(Pid, Path, Headers),
     
@@ -343,7 +341,7 @@ submit(Data, Json, Path) ->
 report(Data, Path, E, R, S) ->
     Pid = connection(Data),
     
-    Headers = [{_Name = <<"content-type">>, <<"application/json">>}],
+    Headers = [{<<"content-type">>, <<"application/json">>}],
     
     Body = #{ stackTrace => exception(Data, E, R, S), 
                   
