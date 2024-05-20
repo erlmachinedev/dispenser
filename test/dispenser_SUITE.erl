@@ -17,7 +17,7 @@
 %%--------------------------------------------------------------------
 
 suite() ->
-    [{timetrap, _Time = {seconds, 10} }].
+    [{timetrap, _Time = {seconds, 10}}].
 
 
 all() -> [test].
@@ -94,6 +94,8 @@ test(_Config) ->
     meck:expect(test, iterator, Iterator),
     meck:expect(test, next, Next),
 
+    meck:expect(gun, data, fun data/4),
+
     erlang:send(dispenser, message(Pid, Ref, 200, Headers)),
     
     {process, _} = sys:get_state(dispenser),
@@ -145,13 +147,20 @@ post(Pid, _Path, _Headers, Json) when is_pid(Pid),
                                       is_binary(Json) ->
     erlang:make_ref().
     
+data(Pid, Ref, _IsFin, Data) when is_pid(Pid),
+                                  is_reference(Ref),
+                                  
+                                  is_binary(Data) ->
+    ok.
+
 await() ->
     Body = <<"{\"status\":\"OK\"}\n">>,
     Code = 202,
     
     meck:loop([{response, nofin, Code, []}, {data, fin, Body}]).
     
-await_body(_Pid, _Ref) ->
+await_body(Pid, Ref) when is_pid(Pid),
+                          is_reference(Ref) ->
     _Body = {ok, <<"{}">>}.
 
 message(Pid, Ref, Status, Headers) ->

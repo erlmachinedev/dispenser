@@ -134,10 +134,10 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
             
             I = iterator(Data, Json),
 
-            if I -> 
-                stream(Data, I, Path);
+            if I == [] -> 
+                submit(Data, Json, Path);
             true ->
-                submit(Data, Json, Path)
+                stream(Data, I, Path)
             end
 
     catch E:R:S ->
@@ -191,7 +191,7 @@ callback(exec, Mod) ->
     end;
 
 callback(iterator, Mod) ->
-    Def = fun (_) -> false end,
+    Def = fun (_) -> [] end,
     
     fun (Json) -> callback(Mod, iterator, [Json], Def) end;
 
@@ -307,12 +307,22 @@ stream(Data, I, Path) ->
     
     Ref = gun:post(Pid, Path, Headers),
     
-    {Body, I} = next(Data, I),
+    %% TODO Implement stream iteration
+    
+    {Body, _} = next(Data, I),
     
     ct:print("Stream ~tp", [gun:data(Pid, Ref, nofin, <<"Bonjour !\n">>)]),
     ct:print("Stream ~tp", [gun:data(Pid, Ref, fin, <<"Bonsoir !\n">>)]),
     
-    ct:print("submit ~tp", [gun:await(Pid, Ref)]).
+    Res = gun:await(Pid, Ref),
+    
+    {response, _IsFin, Code, _} = Res,
+    
+    ct:print("Res ~p", [Res]),
+    
+    Code == 202 orelse error(Code),
+    
+    ct:print("Stream ~tp", [gun:await(Pid, Ref)]).
 
 %%stream(Pid, Ref, Body, none) ->
 %%    gun:data(Pid, Ref, fin, Body);
