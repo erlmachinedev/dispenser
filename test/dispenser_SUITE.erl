@@ -46,9 +46,10 @@ test(_Config) ->
     meck:expect(gun, open, fun open/3),
     meck:expect(gun, await_up, fun await_up/1),
 
-    meck:expect(gun, await, ['_', '_'], _Response = await()),
+    meck:expect(gun, await, 2, _Response = await()),
     
-    meck:expect(gun, post, fun post/4),
+    meck:expect(gun, post, 3, post()),
+    meck:expect(gun, post, 4, post()),
 
     bootstrap(),
     
@@ -143,8 +144,7 @@ await_up(Pid) when is_pid(Pid) ->
 get(Pid, _Path) when is_pid(Pid) ->
     erlang:make_ref().
 
-post(Pid, _Path, _Headers, Json) when is_pid(Pid),
-                                      is_binary(Json) ->
+post() -> 
     erlang:make_ref().
     
 data(Pid, Ref, _IsFin, Data) when is_pid(Pid),

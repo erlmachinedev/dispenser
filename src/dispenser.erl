@@ -312,7 +312,7 @@ stream(Data, I, Path) ->
     
     Fun = fun (IsFin, Term) -> gun:data(Pid, Ref, IsFin, Term) end,
     
-    iterate(Data, next(Data, I), Fun),
+    iterate(Data, Fun, next(Data, I)),
     
     Res = gun:await(Pid, Ref),
     
@@ -332,7 +332,7 @@ iterate(Data, Fun, Acc0) ->
         none -> 
             Fun(fin, Term);
         Acc1 -> 
-            Fun(nofin, Term), iterate(Data, Acc1, Fun) 
+            Fun(nofin, Term), iterate(Data, Fun, Acc1) 
     
     end.
 
