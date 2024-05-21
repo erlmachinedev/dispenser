@@ -110,10 +110,9 @@ init(Init) when is_function(Init) ->
     end.
 
 terminate(Reason, _State, Data) ->
-    Fun = shutdown(Data),
+    shutdown(Data, Reason),
     
-    ct:print("Terminated ~tp", [Data]),
-    Fun(Reason).
+    ct:print("Terminated ~tp", [Data]).
 
 callback_mode() -> [state_functions, state_enter].
 
@@ -127,7 +126,7 @@ process(enter, _State, Data) ->
     {keep_state, Data};
 
 process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
-    try exec(Data, _Body = body(Pid, Ref), context(Headers)) of
+    try exec(Data, _Event = event(Pid, Ref), context(Headers)) of
 
         Json ->
             Path = path(Headers, "/response"),
@@ -242,10 +241,10 @@ setup(Data) ->
     Fun().
 
 -spec exec(data(), json(), context()) -> json().
-exec(Data, Body, Context) ->
+exec(Data, Event, Context) ->
     Fun = Data#data.exec,
     
-    Res = Fun(Body, Context), ct:print("Exec ~p", [Res]),
+    Res = Fun(Event, Context), ct:print("Exec ~p", [Res]),
     Res.
 
 -spec iterator(data(), json()) -> iterator().
@@ -260,9 +259,11 @@ next(Data, I) ->
     
     Fun(I).
 
--spec shutdown(data()) -> function().
-shutdown(Data) ->
-    Data#data.shutdown.
+-spec shutdown(data(), term()) -> function().
+shutdown(Data, Reason) ->
+    Fun = Data#data.shutdown,
+    
+    Fun(Reason).
     
 -spec exception(data(), error | exit | throw, term(), [term()]) -> [string()].
 exception(Data, E, R, StackTrace) ->
@@ -309,7 +310,9 @@ stream(Data, I, Path) ->
     
     %% TODO Implement stream iteration
     
-    {Body, _} = next(Data, I),
+    Fun = fun (IsFin, Term) -> gun:data(Pid, Ref, IsFin, Term) end,
+    
+    iterate(Data, next(Data, I), Fun),
     
     ct:print("Stream ~tp", [gun:data(Pid, Ref, nofin, <<"Bonjour !\n">>)]),
     ct:print("Stream ~tp", [gun:data(Pid, Ref, fin, <<"Bonsoir !\n">>)]),
@@ -323,6 +326,17 @@ stream(Data, I, Path) ->
     Code == 202 orelse error(Code),
     
     ct:print("Stream ~tp", [gun:await(Pid, Ref)]).
+
+iterate(Data, Term, I0, Fun) ->
+    case next(Data, I0) of none -> Fun(fin, Term);
+    
+                           {Term, I1} -> Fun(nofin, Term), 
+                           
+                           iterate(Data, Term, I1) 
+    end,
+    
+    gun:data(Pid, Ref, fin, Data);
+    
 
 %%stream(Pid, Ref, Body, none) ->
 %%    gun:data(Pid, Ref, fin, Body);
@@ -374,12 +388,12 @@ report(Data, Path, E, R, S) ->
 
     ct:print("report ~tp", [gun:await(Pid, Ref)]).
 
-body(Pid, Ref) ->
-    T = gun:await_body(Pid, Ref), ct:print("Body ~tp", [T]),
+event(Pid, Ref) ->
+    T = gun:await_body(Pid, Ref), ct:print("Event ~tp", [T]),
     
-    {ok, Body} = T,
+    {ok, Event} = T,
     
-    Res = Body,
+    Res = Event,
     Res.
     
 %% Context
