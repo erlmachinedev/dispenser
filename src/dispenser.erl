@@ -314,9 +314,6 @@ stream(Data, I, Path) ->
     
     iterate(Data, next(Data, I), Fun),
     
-    ct:print("Stream ~tp", [gun:data(Pid, Ref, nofin, <<"Bonjour !\n">>)]),
-    ct:print("Stream ~tp", [gun:data(Pid, Ref, fin, <<"Bonsoir !\n">>)]),
-    
     Res = gun:await(Pid, Ref),
     
     {response, _IsFin, Code, _} = Res,
@@ -327,26 +324,17 @@ stream(Data, I, Path) ->
     
     ct:print("Stream ~tp", [gun:await(Pid, Ref)]).
 
-iterate(Data, Term, I0, Fun) ->
-    case next(Data, I0) of none -> Fun(fin, Term);
+iterate(Data, Fun, Acc0) ->
+    Term = element(1, Acc0),
     
-                           {Term, I1} -> Fun(nofin, Term), 
-                           
-                           iterate(Data, Term, I1) 
-    end,
+    case next(Data, _I = element(2, Acc0)) of 
     
-    gun:data(Pid, Ref, fin, Data);
+        none -> 
+            Fun(fin, Term);
+        Acc1 -> 
+            Fun(nofin, Term), iterate(Data, Acc1, Fun) 
     
-
-%%stream(Pid, Ref, Body, none) ->
-%%    gun:data(Pid, Ref, fin, Body);
-    
-%%stream(Pid, Ref, Body, I) ->
-%%    case next(Data, I) of 
-%%        none ->
-%%            gun:data(Pid, Ref, nofin, Body);
-%%        {Body, }
-%%    stream(Pid, Ref, )
+    end.
 
 submit(Data, Json, Path) ->
     Pid = connection(Data),
