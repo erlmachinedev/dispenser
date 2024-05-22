@@ -110,9 +110,7 @@ init(Init) when is_function(Init) ->
     end.
 
 terminate(Reason, _State, Data) ->
-    shutdown(Data, Reason),
-    
-    ct:print("Terminated ~tp", [Data]).
+    shutdown(Data, Reason).
 
 callback_mode() -> [state_functions, state_enter].
 
@@ -120,8 +118,6 @@ callback_mode() -> [state_functions, state_enter].
 
 process(enter, _State, Data) ->
     _Ref = invoke(Data, _Path = path("/invocation/next")),
-    
-    ct:print("Ref ~p", [_Ref]),
     
     {keep_state, Data};
 
@@ -140,8 +136,6 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
             end
 
     catch E:R:S ->
-        ct:print("Catch ~p", [[E, R, S]]),
-        
         report(Data, _Path = path(Headers, "/error"), E, R, S)
         
     after
@@ -156,8 +150,6 @@ process(info, {gun_response, Pid, Ref, _, _Status = 200, Headers}, Data) ->
     {repeat_state, Data, []};
 
 process(info, {gun_response, _Pid, _Ref, _, 500, _Headers}, _Data) ->
-    ct:print("Stop message ~tp", [test]),
-
     stop;
 
 process(info, {'DOWN', _MRef, process, _Pid, Reason}, Data) ->
@@ -244,7 +236,7 @@ setup(Data) ->
 exec(Data, Event, Context) ->
     Fun = Data#data.exec,
     
-    Res = Fun(Event, Context), ct:print("Exec ~p", [Res]),
+    Res = Fun(Event, Context), 
     Res.
 
 -spec iterator(data(), json()) -> iterator().
@@ -308,8 +300,6 @@ stream(Data, I, Path) ->
     
     Ref = gun:post(Pid, Path, Headers),
     
-    %% TODO Implement stream iteration
-    
     Fun = fun (IsFin, Term) -> gun:data(Pid, Ref, IsFin, Term) end,
     
     iterate(Data, Fun, next(Data, I)),
@@ -318,11 +308,9 @@ stream(Data, I, Path) ->
     
     {response, _IsFin, Code, _} = Res,
     
-    ct:print("Res ~p", [Res]),
-    
     Code == 202 orelse error(Code),
     
-    ct:print("Stream ~tp", [gun:await(Pid, Ref)]).
+    gun:await(Pid, Ref).
 
 iterate(Data, Fun, Acc0) ->
     Term = element(1, Acc0),
@@ -344,11 +332,9 @@ submit(Data, Json, Path) ->
  
     {response, _IsFin, Code, _} = Res,
     
-    ct:print("Res ~p", [Res]),
-    
     Code == 202 orelse error(Code),
     
-    ct:print("submit ~tp", [gun:await(Pid, Ref)]).
+    gun:await(Pid, Ref).
 
 report(Data, Path, E, R, S) ->
     Pid = connection(Data),
@@ -363,21 +349,17 @@ report(Data, Path, E, R, S) ->
         
     Json = jsx:encode(Body),
     
-    ct:print("Json ~tp", [Json]),
-    
     Ref = gun:post(Pid, Path, Headers, Json),
     Res = gun:await(Pid, Ref),
-        
-    ct:print("Report ~tp", [Res]),
     
     {response, _IsFin, Code, _} = Res,
     
     Code == 202 orelse error(Code),
 
-    ct:print("report ~tp", [gun:await(Pid, Ref)]).
+    gun:await(Pid, Ref).
 
 event(Pid, Ref) ->
-    T = gun:await_body(Pid, Ref), ct:print("Event ~tp", [T]),
+    T = gun:await_body(Pid, Ref),
     
     {ok, Event} = T,
     

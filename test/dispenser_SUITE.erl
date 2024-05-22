@@ -24,8 +24,6 @@ all() -> [test].
 
 init_per_suite(Config) ->
     ct:print("ENV ~tp", [os:getenv(_Var = "AWS_LAMBDA_RUNTIME_API")]),
-    
-    %os:putenv(Var, "127.0.0.1:8080"),
 
     Res = Config,
     Res.
@@ -144,9 +142,6 @@ await_up(Pid) when is_pid(Pid) ->
 get(Pid, _Path) when is_pid(Pid) ->
     erlang:make_ref().
 
-post() -> 
-    erlang:make_ref().
-    
 data(Pid, Ref, _IsFin, Data) when is_pid(Pid),
                                   is_reference(Ref),
                                   
@@ -158,7 +153,10 @@ await() ->
     Code = 202,
     
     meck:loop([{response, nofin, Code, []}, {data, fin, Body}]).
-    
+
+post() -> 
+    erlang:make_ref().
+
 await_body(Pid, Ref) when is_pid(Pid),
                           is_reference(Ref) ->
     _Body = {ok, <<"{}">>}.
