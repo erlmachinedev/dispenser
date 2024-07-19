@@ -33,6 +33,8 @@
 
 -type iterator() :: term().
 
+-export_type([event/0, context/0, iterator/0]).
+
 -callback setup() -> ok.
 
 -callback decode(json()) -> term().
