@@ -1,10 +1,5 @@
 -module(dispenser).
 
--define(AWS_LAMBDA_RUNTIME_API, "AWS_LAMBDA_RUNTIME_API").
-
--define(LAMBDA_TASK_ROOT, "LAMBDA_TASK_ROOT").
--define(_HANDLER, "_HANDLER").
-
 -import(erlbox, [success/3, failure/1, callback/3, callback/4]).
 
 -export([boot/1, boot/2, boot/3]).
@@ -16,8 +11,6 @@
 -export([callback_mode/0]).
 
 -export([process/3]).
-
--export([file/0, method/0]).
 
 -behaviour(gen_statem).
 
@@ -378,7 +371,7 @@ context(Headers) ->
 
 -spec uri() -> string().
 uri() -> 
-    Env = os:getenv(?AWS_LAMBDA_RUNTIME_API),
+    Env = os:getenv("AWS_LAMBDA_RUNTIME_API"),
     
     URI = lists:append("http://", Env),
     
@@ -386,19 +379,4 @@ uri() ->
     
 -spec root() -> file:filename().
 root() ->
-    os:getenv(?LAMBDA_TASK_ROOT).
-
--spec file() -> file:filename().
-file() ->
-    [File, _Method] = string:lexemes(_Env = os:getenv(?_HANDLER), "."),
-
-    filename:join(_Root = root(), File).
-
--spec method() -> string().
-method() ->
-    Env = os:getenv(?_HANDLER),
-    
-    [_File, Method] = string:lexemes(Env, "."),
-
-    Res = Method,
-    Res.
+    os:getenv("LAMBDA_TASK_ROOT").
