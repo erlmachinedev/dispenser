@@ -1,5 +1,5 @@
 PROJECT = dispenser
-PROJECT_DESCRIPTION = "λ machine which brings Erlang to the cloud (AWS Lambda)"
+PROJECT_DESCRIPTION = "Machine which brings Erlang to the cloud (AWS Lambda)"
 PROJECT_VERSION = 0.0.1
 
 DEPS = erlbox jsx gun
