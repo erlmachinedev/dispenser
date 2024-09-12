@@ -1,6 +1,6 @@
 {application, dispenser,
  [
-  {description,  "Machine which brings Erlang to the cloud (AWS Lambda)"},
+  {description,  "Vending machine which brings Erlang to the cloud (AWS Lambda)"},
   {vsn,          "0.0.1"},
   {modules,      []},
   {registered,   []},

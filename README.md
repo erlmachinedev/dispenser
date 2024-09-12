@@ -1,2 +1,2 @@
 # Dispenser
-Machine which brings Erlang to the cloud (AWS Lambda)
+Vending machine which brings Erlang to the cloud (AWS Lambda)
