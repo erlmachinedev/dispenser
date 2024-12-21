@@ -376,7 +376,3 @@ uri() ->
     URI = lists:append("http://", Env),
     
     uri_string:parse(URI).
-    
--spec root() -> file:filename().
-root() ->
-    os:getenv("LAMBDA_TASK_ROOT").
