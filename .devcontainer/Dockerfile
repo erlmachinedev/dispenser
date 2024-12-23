@@ -15,6 +15,7 @@ RUN apk add make
 RUN apk add git
 RUN apk add curl
 
+RUN apk add mc
 RUN apk add htop
 
 RUN apk add --no-cache openssh
