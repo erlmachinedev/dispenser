@@ -1,4 +1,3 @@
-# [Choice] alpine,...
 ARG VARIANT="alpine"
 FROM erlang:${VARIANT}
 
