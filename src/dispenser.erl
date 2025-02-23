@@ -3,7 +3,7 @@
 -import(erlbox, [success/3, failure/1, callback/3, callback/4]).
 
 -export([boot/1, boot/2, boot/3]).
-
+    
 -export([start_link/3]).
 
 -export([init/1]).
@@ -371,7 +371,7 @@ context(Headers) ->
 
 -spec uri() -> string().
 uri() -> 
-    Env = os:getenv("AWS_LAMBDA_RUNTIME_API"),
+    Env = os:getenv("AWS_LAMBDA_RUNTIME_API", _Def = "127.0.0.1:8080"),
     
     URI = lists:append("http://", Env),
     

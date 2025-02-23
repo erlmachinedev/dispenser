@@ -23,10 +23,7 @@ suite() ->
 all() -> [test].
 
 init_per_suite(Config) ->
-    ct:print("ENV ~tp", [os:getenv(_Var = "AWS_LAMBDA_RUNTIME_API")]),
-
-    Res = Config,
-    Res.
+    Config.
 
 end_per_suite(_Config) ->
     ok.
@@ -35,12 +32,12 @@ end_per_suite(_Config) ->
 %% TEST CASES
 %%--------------------------------------------------------------------
 
-test(_Config) ->
-    meck:new(test, [passthrough, non_strict, no_link]),
+test(_Config) ->  
+    meck:new(test, [non_strict, no_link]), 
     meck:new(gun, [passthrough, no_link]),
-    
+
     meck:new(init, [passthrough, unstick, no_link]),
-    
+
     meck:expect(gun, open, fun open/3),
     meck:expect(gun, await_up, fun await_up/1),
 
