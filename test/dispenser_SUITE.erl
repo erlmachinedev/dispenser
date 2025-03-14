@@ -81,13 +81,11 @@ test(_Config) ->
 
     %% Response streaming
     
-    Iterator = fun (_) -> [<<"{">>, <<"}">>] end,
-    
     Next = fun ([]) -> none; 
                ([Term|I]) -> {Term, I} 
            end,
     
-    meck:expect(test, iterator, Iterator),
+    meck:expect(test, iterator, _I = fun (_) -> [<<"{">>, <<"}">>] end),
     meck:expect(test, next, Next),
 
     meck:expect(gun, data, fun data/4),
